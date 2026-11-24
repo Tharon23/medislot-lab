@@ -1,0 +1,66 @@
+name: medislot
+
+services:
+  nginx:
+    image: nginx:stable
+    ports:
+      - "8080:80"
+    volumes:
+      - ./app:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - php
+    networks: [medislot]
+
+  php:
+    build: ./docker/php
+    env_file: .env
+    volumes:
+      - ./app:/var/www/html
+    depends_on:
+      - mysql
+      - redis
+      - minio
+      - mailhog
+    networks: [medislot]
+
+  mysql:
+    image: mysql:8
+    env_file: .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [medislot]
+
+  redis:
+    image: redis:7
+    networks: [medislot]
+
+  minio:
+    image: chainguard/minio:latest
+    command: server /data --console-address ":9001"
+    env_file: .env
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks: [medislot]
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "8025:8025"
+    networks: [medislot]
+
+volumes:
+  mysql_data:
+  minio_data:
+
+networks:
+  medislot:
+    driver: bridge

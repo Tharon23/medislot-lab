@@ -1,0 +1,684 @@
+% Stage 1 deliverable: Statement of Work + Threat Model (MediSlot / NovaMed)
+% Build: pdflatex (run twice for the table of contents and references).
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding and language ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+
+% --- Layout ---
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{parskip}
+
+% --- Tables ---
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+
+% --- Graphics / diagrams ---
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit,backgrounds,arrows.meta,shapes.geometric}
+
+% --- Misc ---
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% --- Column helpers for tabularx ---
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{C}{>{\Centering\arraybackslash}X}
+
+% --- Palette for severity ---
+\definecolor{crit}{HTML}{B00020}
+\definecolor{high}{HTML}{C8651B}
+\definecolor{med}{HTML}{B38600}
+
+% --- Header / footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{MediSlot — NovaMed Sp. z o.o.}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+
+\title{\textbf{Test penetracyjny środowiska MediSlot}\\[0.3em]
+\large Statement of Work oraz Threat Model\\[0.2em]
+\normalsize NovaMed Sp. z o.o.}
+\author{Zespół \\ Kamil Szkarłat \textbullet{} Bartłomiej Ząbek \textbullet{} Jakub Szkaradek \textbullet{} Radosław Chruściński}
+\date{24.10.2026 r.}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Pole} & \textbf{Wartość} \\
+\midrule
+Data & 24.10.2026 \\
+Klient & NovaMed Sp. z o.o. \\
+Wykonawca & Zespół: Kamil Szkarłat, Bartłomiej Ząbek, Jakub Szkaradek, Radosław Chruściński \\
+Przedmiot & Test penetracyjny MediSlot + stack labowy \\
+Metodyka TM & DFD + STRIDE + jakościowa ocena ryzyka \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1em}
+\tableofcontents
+\newpage
+
+% ======================================================================
+\part*{Część I — Statement of Work (SoW)}
+\addcontentsline{toc}{part}{Część I — Statement of Work (SoW)}
+% ======================================================================
+
+\section{Strony porozumienia}
+
+\subsection{Zamawiający (Klient)}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L@{}}
+\toprule
+Nazwa & NovaMed Sp. z o.o. \\
+Opis & Fikcyjna przychodnia wielospecjalistyczna korzystająca z systemu MediSlot do rejestracji wizyt, prowadzenia syntetycznej dokumentacji pacjentów oraz zarządzania personelem \\
+Kontakt RoE & Bartłomiej Ząbek (rola: \emph{Client Security Contact / RoE}) \\
+Przedstawiciel biznesowy & Jakub Szkaradek (rola: \emph{Product Owner po stronie klienta}) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Wykonawca (Testerzy)}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L@{}}
+\toprule
+Nazwa & Zespół studencki wykonujący symulowany engagement pentestowy \\
+Skład & Kamil Szkarłat, Jakub Szkardek, Bartłomiej Ząbek, Radosław Chruściński \\
+Kierownik techniczny & Kamil Szkarłat \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Charakter engagementu}
+
+Strony ustalają, że:
+\begin{enumerate}[leftmargin=*]
+  \item Środowisko jest \textbf{celowo przygotowanym laboratorium} (Docker Compose), a nie produkcją NovaMed.
+  \item Dane w systemie są \textbf{wyłącznie syntetyczne}.
+  \item Część wiedzy o architekturze i podatnościach jest współdzielona (zespół buduje i testuje laboratorium) — w SoW formalnie rozdzielono jednak \textbf{wiedzę testera} i \textbf{wiedzę obrony (SOC)}, zgodnie z wymaganiami.
+  \item Celem jest metodyczne przeprowadzenie testu (plan $\rightarrow$ discovery $\rightarrow$ atak $\rightarrow$ dowody $\rightarrow$ raport), a nie destabilizacja infrastruktury spoza labu.
+\end{enumerate}
+
+\section{Przedmiot i cele testu}
+
+\subsection{Cele biznesowe klienta}
+\begin{itemize}[leftmargin=*]
+  \item Uzyskanie wiedzy o stanie bezpieczeństwa stacku MediSlot przed ewentualnym wdrożeniem.
+  \item Identyfikacja podatności umożliwiających nieautoryzowany dostęp do danych medycznych (syntetycznych), eskalację uprawnień oraz przejęcie serwera aplikacji (RCE).
+  \item Otrzymanie priorytetyzowanej listy findingów z oceną ryzyka i rekomendacjami napraw.
+\end{itemize}
+
+\subsection{Cele techniczne engagementu}
+\begin{itemize}[leftmargin=*]
+  \item Przeprowadzenie testu w modelu zbliżonym do \textbf{grey-box} (dostęp do części dokumentacji architektury i kont testowych).
+  \item Pokrycie co najmniej warstw: system operacyjny kontenerów, reverse proxy, aplikacja PHP, baza danych, magazyn obiektów, poczta labowa, magazyn sesji.
+  \item Użycie narzędzi ofensywnych oraz analizatorów (m.in. skanery zależności/obrazów, audyt konfiguracji OS).
+  \item Udokumentowanie \textbf{co najmniej jednej podatności z roku 2026} (plan: celowo podatna wersja PHP) oraz scenariusza \textbf{krytycznego ustalenia} z kontaktem RoE.
+\end{itemize}
+
+\section{Wiedza testera (per system / usługa)}
+
+Tabela opisuje \textbf{zakładaną wiedzę strony atakującej} na start engagementu.
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{3cm} L@{}}
+\toprule
+\normalfont\textbf{System / usługa} & \textbf{Wiedza testera na start} \\
+\midrule
+MediSlot (PHP app) & URL labu na \texttt{localhost}, opis ról (pacjent, lekarz, recepcja, admin), happy path biznesowy, konta testowe z hasłami labowymi, ogólny opis endpointów z dokumentacji API/UI (bez wskazania lokalizacji luk) \\
+Nginx & Fakt użycia jako reverse proxy; brak pełnej konfiguracji \texttt{nginx.conf} na start \\
+PHP-FPM & Informacja, że runtime to PHP; \textbf{wersja dokładna nie jest ujawniana} w briefie \\
+MySQL & Fakt istnienia RDBMS; brak poświadczeń produkcyjnych w briefie testera (poświadczenia labowe mogą być w osobnym \emph{Test Data Pack} po stronie klienta na życzenie grey-box) \\
+MinIO & Wiedza, że załączniki pacjentów są w object storage zgodnym z S3; endpoint labowy do discovery \\
+Mailhog & Wiedza, że poczta nie wychodzi na świat — UI Mailhog dostępny w labie (przydatne przy resecie hasła) \\
+Redis & Wiedza o użyciu do sesji; brak wymogu znajomości \texttt{REDIS\_PASSWORD} na start \\
+Sieć Docker & Nazwa projektu Compose; zakaz ataków na hosta (patrz wyłączenia) \\
+\bottomrule
+\end{tabularx}
+
+\vspace{0.5em}
+\noindent\textbf{Konta testowe:} zestaw kont dla 4 ról zostanie dostarczony w \emph{Appendix A — Test Accounts} przed startem fazy praktycznej (etap II).
+
+\section{Wiedza obrony / SOC (per system / usługa)}
+
+Tabela opisuje \textbf{zakładaną widoczność i kontrole po stronie klienta}.
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{3cm} L@{}}
+\toprule
+\normalfont\textbf{System / usługa} & \textbf{Widoczność SOC / obrony} \\
+\midrule
+MediSlot & Logi aplikacji (logowania, błędy, upload); możliwość tymczasowego wyłączenia konta; brak WAF klasy produkcyjnej w labie \\
+Nginx & Access/error logi proxy; możliwość ograniczenia rate \\
+PHP-FPM / obraz & Możliwość skanowania obrazów (Trivy) w pipeline „klienta”; alert przy krytycznym CVE runtime — w labie: procedura eskalacji do RoE \\
+MySQL & Logi połączeń; brak ekspozycji portu DB na host poza sieć Compose (docelowa konfiguracja) \\
+MinIO & Audit dostępu do bucketów; polityka prywatności obiektów \\
+Mailhog & Podgląd wiadomości w UI labowym \\
+Redis & Brak zaawansowanego monitoringu w labie; założenie: sesje niewidoczne dla klasycznego IDS \\
+Procedura RoE & Przy findingach Critical (zwłaszcza RCE / masowy wyciek danych) — natychmiastowy kontakt z przedstawicielem RoE, wstrzymanie dalszego testowania do potwierdzenia \\
+\bottomrule
+\end{tabularx}
+
+\section{Zakres (Scope) i wyłączenia}
+
+\subsection{In scope}
+\begin{enumerate}[leftmargin=*]
+  \item Aplikacja webowa \textbf{MediSlot} (UI + API HTTP).
+  \item Kontenery i usługi Docker Compose: Debian (warstwa OS kontenerów), Nginx, PHP-FPM (MediSlot), MySQL, MinIO, Mailhog, Redis.
+  \item Ruch sieciowy \textbf{wyłącznie} w sieci labowej Compose oraz na portach opublikowanych na \texttt{localhost} maszyny testera.
+  \item Konfiguracja ww. usług w kontekście projektu MediSlot.
+  \item Procesy: rejestracja/logowanie, zarządzanie wizytami, karty/notatki, upload załączników, reset hasła, panel admina/recepcji.
+  \item Identyfikacja i (w granicach RoE) wykorzystanie podatności, w tym łańcuchów prowadzących do RCE oraz błędów kontroli dostępu między rolami.
+\end{enumerate}
+
+\subsection{Out of scope (wyłączenia)}
+\begin{enumerate}[leftmargin=*]
+  \item System operacyjny \textbf{hosta} testera/klienta (Windows, Linux), hypervisor, Docker Desktop / dockerd jako cel ataku.
+  \item Inne kontenery, projekty i usługi spoza pliku Compose MediSlot.
+  \item Sieci poza labem — \textbf{zakaz} skanowania i atakowania.
+  \item Ataki socjotechniczne na osoby spoza zespołu projektowego.
+  \item Użycie lub pozyskiwanie \textbf{prawdziwych} danych medycznych / PII.
+  \item Ataki typu DoS/DDoS wyczerpujące CPU/RAM/dysk \textbf{hosta} lub trwale unieruchamiające środowisko bez wartości dowodowej (krótkie, kontrolowane testy dostępności — tylko za zgodą RoE).
+  \item Modyfikacja ocen / systemów uczelnianych oraz infrastruktury AGH niezwiązanej z labem.
+  \item Publikacja exploita 0-day poza raportem projektowym bez uzgodnienia z prowadzącym.
+\end{enumerate}
+
+\subsection{Środowisko}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L@{}}
+\toprule
+\normalfont\textbf{Parametr} & \textbf{Ustalenie} \\
+\midrule
+Typ & Lab lokalny (Docker Compose) \\
+Dostęp zewnętrzny & Brak — aplikacja niewystawiona publicznie \\
+Dane & Syntetyczne \\
+Okno testów (etap II) & Do uzgodnienia przed zajęciami etapu II (ok. 2–3 tygodnie kalendarzowe) \\
+\bottomrule
+\end{tabularx}
+
+\section{Rules of Engagement (RoE)}
+
+\subsection{Zasady ogólne}
+\begin{enumerate}[leftmargin=*]
+  \item Testy wyłącznie w zakresie z sekcji 5.
+  \item Każde działanie destrukcyjne wykraczające poza niezbędny dowód (np. drop bazy) wymaga \textbf{uprzedniej zgody RoE}.
+  \item Hasła i sekrety labowe nie są przenoszone poza zespół i dokumentację projektową.
+  \item Dowody (screenshoty, request/response, logi narzędzi) przechowuje się w repozytorium / katalogu dowodów projektu.
+\end{enumerate}
+
+\subsection{Klasyfikacja ustaleń i eskalacja}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L L@{}}
+\toprule
+\normalfont\textbf{Severity} & \textbf{Przykład} & \textbf{Działanie} \\
+\midrule
+\textcolor{crit}{Critical} & RCE, pełne przejęcie kontenera app, masowy wyciek danych pacjentów & \textbf{Natychmiastowy kontakt RoE}, wstrzymanie testów tego wektora do potwierdzenia, notatka z datą/godziną \\
+\textcolor{high}{High} & IDOR na dane wielu pacjentów, przejęcie konta admina & Kontakt RoE w ciągu 24 h labowych; kontynuacja innych torów dozwolona \\
+\textcolor{med}{Medium / Low / Info} & XSS stored, braki nagłówków, findingi skanera bez exploita & Bez bieżącej eskalacji; zbiorczo w raporcie \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Krytyczne ustalenie w trakcie testu}
+
+Strony ustalają procedurę ćwiczeniową:
+\begin{enumerate}[leftmargin=*]
+  \item Tester dokumentuje timing, wektor, wpływ.
+  \item Kontaktuje się z osobą RoE kanałem uzgodnionym.
+  \item RoE potwierdza odbiór i ewentualnie wydaje dyspozycję (kontynuuj / wstrzymaj / zbierz dodatkowe logi).
+  \item Zdarzenie trafia do raportu etapu II jako osobna sekcja „Critical finding — RoE contact”.
+\end{enumerate}
+
+\subsection{Konta i dane testowe}
+\begin{itemize}[leftmargin=*]
+  \item Dozwolone jest tworzenie dodatkowych kont w ramach funkcji aplikacji.
+  \item Zabronione jest celowe niszczenie kont innych członków zespołu bez uzgodnienia.
+  \item Przy podatności prowadzącej do RCE dozwolone jest utworzenie \textbf{minimalnego} dowodu (np. plik marker / komenda \texttt{id}), bez cryptominingu i bez lateral movement na hosta.
+\end{itemize}
+
+\section{Warunki re-testów}
+\begin{enumerate}[leftmargin=*]
+  \item Po dostarczeniu przez „klienta” poprawek (patch / nowa wersja Compose) Wykonawca przeprowadza \textbf{re-test} findingów Critical oraz High.
+  \item Re-test Medium — wybiórczo (uzgodnienie listy max. 5 szt.).
+  \item Okno re-testu: \textbf{do 7 dni} od zgłoszenia gotowości środowiska przez klienta).
+  \item Wynik re-testu: \emph{Fixed} / \emph{Partially fixed} / \emph{Not fixed} / \emph{Accept risk} — z krótkim dowodem.
+  \item Low/Info nie podlegają obowiązkowemu re-testowi, o ile nie wynikają z residual risk po Critical.
+\end{enumerate}
+
+\section{Metodyka i narzędzia}
+\begin{itemize}[leftmargin=*]
+  \item Przybliżona metodyka: elementy \textbf{PTES} / \textbf{OWASP Testing Guide} + mapowanie na \textbf{STRIDE} z threat modelu.
+  \item Narzędzia: przeglądarka + proxy (np. Burp / ZAP), klasyczne narzędzia HTTP, sqlmap, Trivy, Lynis, ewentualnie Nuclei / własne skrypty.
+  \item Każdy finding w raporcie końcowym: opis, reprodukcja, dowód, CWE, CVSS, odniesienie CVE (jeśli dotyczy), remediacja.
+\end{itemize}
+
+\section{Dostarczalne (Deliverables)}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L@{}}
+\toprule
+\normalfont\textbf{Etap} & \textbf{Dostarczalne} \\
+\midrule
+I & Niniejszy SoW + Threat Model (dokument + prezentacja $\sim$10 min) \\
+II & Dokumentacja przebiegu testów, dowody, opis narzędzi, notatka RoE \\
+III & Raport końcowy (SoW+TM+praktyka, streszczenie zarządcze, metryki, mitigacje, podział prac) \\
+\bottomrule
+\end{tabularx}
+
+\section{Harmonogram (orientacyjny)}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}L L@{}}
+\toprule
+\normalfont\textbf{Faza} & \textbf{Orientacja} \\
+\midrule
+Etap I — dokumenty i prezentacja & Do zajęć stacjonarnych etapu I \\
+Budowa labu MediSlot & Równolegle / tuż po akceptacji SoW \\
+Etap II — testy & Okno uzgodnione przed zajęciami etapu II \\
+Etap III — raport & Przed zajęciami etapu III \\
+\bottomrule
+\end{tabularx}
+
+\section{Akceptacja}
+
+\begin{tabularx}{\textwidth}{@{}l l L c c@{}}
+\toprule
+\textbf{Strona} & \textbf{Imię} & \textbf{Rola} \\
+\midrule
+Klient & Bartłomiej Ząbek & RoE / Security Contact \\
+Klient & Jakub Szkaradek & Product Owner & \\
+Wykonawca & Kamil Szkarłat & Lead Tester & \\
+Wykonawca & Radosław Chruściński & Tester & \\
+Wykonawca & Jakub Szkaradek & Tester & \\
+Wykonawca & Bartłomiej Ząbek & Tester & \\
+\bottomrule
+\end{tabularx}
+
+\section*{Appendix A — Test Accounts}
+\addcontentsline{toc}{section}{Appendix A — Test Accounts}
+
+\begin{tabularx}{\textwidth}{@{}l l l L@{}}
+\toprule
+\textbf{Rola} & \textbf{Login} & \textbf{Hasło labowe} & \textbf{Uwagi} \\
+\midrule
+Pacjent & \texttt{pacjent1@novamed.lab} & \emph{(uzupełnić)} & Własne wizyty \\
+Lekarz & \texttt{lekarz1@novamed.lab} & \emph{(uzupełnić)} & Pacjenci przypisani \\
+Recepcja & \texttt{recepcja@novamed.lab} & \emph{(uzupełnić)} & Terminarz \\
+Admin & \texttt{admin@novamed.lab} & \emph{(uzupełnić)} & Pełny dostęp \\
+\bottomrule
+\end{tabularx}
+
+\section*{Appendix B — Porty labowe}
+\addcontentsline{toc}{section}{Appendix B — Porty labowe}
+
+\begin{tabularx}{\textwidth}{@{}l l L@{}}
+\toprule
+\textbf{Usługa} & \textbf{Port hosta (plan)} & \textbf{Uwagi} \\
+\midrule
+MediSlot via Nginx & 8080 & HTTP lab \\
+Mailhog UI & 8025 & Podgląd maili \\
+MinIO API / Console & 9000 / 9001 & Object storage \\
+MySQL & \emph{(opcjonalnie niepublikowany)} & Preferowane tylko w sieci Compose \\
+Redis & \emph{(opcjonalnie niepublikowany)} & Preferowane tylko w sieci Compose \\
+\bottomrule
+\end{tabularx}
+
+\newpage
+% ======================================================================
+\part*{Część II — Threat Model}
+\addcontentsline{toc}{part}{Część II — Threat Model}
+% ======================================================================
+
+\section{Streszczenie}
+
+System \textbf{MediSlot} to portal przychodni \textbf{NovaMed Sp. z o.o.} do rejestracji wizyt, prowadzenia syntetycznej dokumentacji pacjentów oraz zarządzania rolami personelu. Model zagrożeń obejmuje aplikację PHP oraz stack labowy (Nginx, MySQL, MinIO, Redis, Mailhog) uruchamiany w Docker Compose.
+
+Celem dokumentu jest:
+\begin{enumerate}[leftmargin=*]
+  \item Ustalenie aktywów, aktorów i granic zaufania.
+  \item Opisanie przepływów danych (DFD).
+  \item Analiza STRIDE per element.
+  \item Ocena ryzyka i propozycja mitigacji (w tym takich, które w labie celowo nie będą w pełni wdrożone).
+  \item Wnioski pod SoW i fazę praktyczną.
+\end{enumerate}
+
+\section{Schemat architektury (rysunek wysokopoziomowy)}
+
+\begin{center}
+\begin{tikzpicture}[
+  font=\small,
+  node distance=8mm,
+  box/.style={draw,rounded corners,align=center,minimum height=9mm,minimum width=22mm,fill=blue!5},
+  store/.style={draw,align=center,minimum height=9mm,minimum width=20mm,fill=green!6},
+  arr/.style={-{Stealth[length=2mm]},thick}
+]
+  \node[box] (browser) {Przeglądarka};
+  \node[box,below=12mm of browser] (nginx) {Nginx\\reverse proxy};
+  \node[box,below=of nginx] (php) {PHP-FPM\\MediSlot};
+
+  \node[store,below=14mm of php, xshift=-33mm] (mysql) {MySQL};
+  \node[store,right=6mm of mysql] (redis) {Redis\\sesje};
+  \node[store,right=6mm of redis] (minio) {MinIO\\załączniki};
+  \node[store,right=6mm of minio] (mail) {Mailhog\\SMTP lab};
+
+  \draw[arr] (browser) -- node[right,font=\scriptsize]{HTTP localhost:8080} (nginx);
+  \draw[arr] (nginx) -- (php);
+  \draw[arr] (php) -- (mysql);
+  \draw[arr] (php) -- (redis);
+  \draw[arr] (php) -- (minio);
+  \draw[arr] (php) -- (mail);
+
+  \begin{scope}[on background layer]
+    \node[draw,dashed,rounded corners,fill=red!4,
+      fit=(browser),label={[font=\scriptsize]above:Host testera (OUT OF SCOPE)}] {};
+    \node[draw,dashed,rounded corners,fill=yellow!6,inner sep=5mm,
+      fit=(nginx)(php)(mysql)(redis)(minio)(mail),
+      label={[font=\scriptsize]above right:Docker Compose — IN SCOPE}] {};
+  \end{scope}
+\end{tikzpicture}
+\end{center}
+
+\noindent\textbf{Granica zaufania (trust boundary):} ruch wchodzi do labu wyłącznie przez Nginx na porcie labowym. MySQL, Redis i (docelowo) MinIO API nie powinny być konieczne do ekspozycji na host na potrzeby happy path — jeśli porty są opublikowane „dla wygody labu”, stanowi to osobne ryzyko (patrz STRIDE).
+
+\section{Aktorzy}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{2.6cm} l L L@{}}
+\toprule
+\normalfont\textbf{Aktor} & \textbf{Typ} & \textbf{Opis} & \textbf{Motywacja / wpływ} \\
+\midrule
+Pacjent & Legitymowany & Rejestruje się, umawia wizyty, przegląda własną dokumentację & Prywatność własnych danych; ciekawość cudzych kart \\
+Lekarz & Legitymowany & Notatki, podgląd pacjentów przypisanych & Dostęp do PHI syntetycznego; eskalacja poza przypisanie \\
+Recepcja & Legitymowany & Terminarz, dane kontaktowe, zakładanie wizyt & Szeroki dostęp operacyjny; nadużycie funkcji \\
+Admin & Legitymowany & Użytkownicy, role, konfiguracja & Pełna kompromitacja aplikacji przy przejęciu konta \\
+Zewnętrzny atakujący & Zagrożenie & Dostęp do UI/API labu na localhost (narracyjnie: „internetowy” atakujący) & RCE, wyciek danych, przejęcie kont \\
+Złośliwy insider & Zagrożenie & Legitymowane konto pacjenta/recepcji & IDOR, horizontal/vertical privilege escalation \\
+Proces / usługa & Element systemu & Komponenty stacku (Nginx, PHP, DB\ldots) & Misconfig, CVE, słabe sekrety \\
+\bottomrule
+\end{tabularx}
+
+\section{Zasoby (aktywa)}
+
+\begin{tabularx}{\textwidth}{@{}c L c c c L@{}}
+\toprule
+\textbf{ID} & \textbf{Aktywo} & \textbf{Pouf.} & \textbf{Integr.} & \textbf{Dostęp.} & \textbf{Uzasadnienie} \\
+\midrule
+A1 & Konta i poświadczenia (4 role) & Wys. & Wys. & Śr. & Wejście do systemu \\
+A2 & Sesje (Redis) & Wys. & Wys. & Śr. & Hijacking = przejęcie tożsamości \\
+A3 & Dane wizyt i notatek lekarskich & Wys. & Wys. & Śr. & Rdzeń „PHI” syntetycznego \\
+A4 & Załączniki w MinIO & Wys. & Wys. & Śr. & Skierowania, wyniki, dokumenty \\
+A5 & Skrzynka Mailhog (tokeny resetu) & Wys. & Śr. & Nis. & Przejęcie konta przez reset \\
+A6 & Sekrety (DB, MinIO, Redis) & Wys. & Wys. & Śr. & Lateral movement w labie \\
+A7 & Runtime PHP / kod MediSlot & Wys. & Wys. & Wys. & RCE = pełne przejęcie app \\
+A8 & Logi Nginx/PHP & Śr. & Śr. & Nis. & Ślady SOC / anty-forensics \\
+\bottomrule
+\end{tabularx}
+
+\section{Diagram przepływu danych (DFD)}
+
+\subsection{Kontekst (Level 0)}
+
+\begin{center}
+\begin{tikzpicture}[
+  font=\small,
+  actor/.style={draw,circle,align=center,minimum size=15mm,fill=blue!5},
+  sys/.style={draw,rounded corners,align=center,minimum height=16mm,minimum width=40mm,fill=green!6,font=\bfseries},
+  arr/.style={-{Stealth[length=2mm]},thick},
+  darr/.style={-{Stealth[length=2mm]},thick,dashed,red!55!black},
+  lbl/.style={font=\scriptsize,fill=white,inner sep=1.5pt}
+]
+  \node[sys] (sys) {MediSlot System\\(PHP + stack)};
+  \node[actor,above=24mm of sys] (lek) {Lekarz};
+  \node[actor,left=38mm of sys] (pac) {Pacjent};
+  \node[actor,right=38mm of sys] (rec) {Recepcja};
+  \node[actor,below left=24mm and 24mm of sys] (adm) {Admin};
+  \node[actor,below right=24mm and 24mm of sys] (att) {Atakujący};
+
+  \draw[arr] (pac) -- node[lbl,above]{wizyty, własne dane} (sys);
+  \draw[arr] (lek) -- node[lbl]{notatki, karty} (sys);
+  \draw[arr] (rec) -- node[lbl,above]{terminarz} (sys);
+  \draw[arr] (adm) -- node[lbl,sloped]{użytkownicy, role} (sys);
+  \draw[darr] (att) -- node[lbl,sloped]{nieautoryzowane żądania} (sys);
+\end{tikzpicture}
+\end{center}
+
+\subsection{Level 1 — główne procesy i magazyny}
+
+\begin{center}
+\begin{tikzpicture}[
+  font=\footnotesize,
+  proc/.style={draw,rounded corners,align=center,minimum height=10mm,minimum width=44mm,fill=blue!5},
+  store/.style={draw,align=center,minimum height=9mm,minimum width=32mm,fill=green!6},
+  user/.style={draw,rounded corners,align=center,minimum height=12mm,minimum width=28mm,fill=orange!8},
+  arr/.style={-{Stealth[length=1.8mm]},gray!60!black},
+  barr/.style={{Stealth[length=1.8mm]}-{Stealth[length=1.8mm]},gray!60!black}
+]
+  % left column: external user
+  \node[user] (u) at (0,-4.5) {Użytkownik /\\Atakujący};
+
+  % middle column: application processes
+  \node[proc] (p1) at (5.7,0)    {P1 Uwierzytelnianie i sesje};
+  \node[proc] (p2) at (5.7,-1.8) {P2 Zarządzanie wizytami};
+  \node[proc] (p3) at (5.7,-3.6) {P3 Karty i notatki};
+  \node[proc] (p4) at (5.7,-5.4) {P4 Załączniki};
+  \node[proc] (p5) at (5.7,-7.2) {P5 Reset hasła i powiadomienia};
+  \node[proc] (p6) at (5.7,-9.0) {P6 Administracja użytkownikami};
+
+  % right column: data stores
+  \node[store] (d1) at (11.2,-2.7) {D1 MySQL};
+  \node[store] (d2) at (11.2,-4.5) {D2 Redis (sesje)};
+  \node[store] (d3) at (11.2,-6.3) {D3 MinIO (pliki)};
+  \node[store] (d4) at (11.2,-8.1) {D4 Mailhog};
+
+  \foreach \p in {p1,p2,p3,p4,p5,p6} { \draw[arr] (u.east) -- (\p.west); }
+
+  \draw[barr] (p1.east) -- (d1.west);
+  \draw[barr] (p1.east) -- (d2.west);
+  \draw[barr] (p2.east) -- (d1.west);
+  \draw[barr] (p3.east) -- (d1.west);
+  \draw[barr] (p4.east) -- (d1.west);
+  \draw[barr] (p4.east) -- (d3.west);
+  \draw[barr] (p5.east) -- (d1.west);
+  \draw[arr]  (p5.east) -- (d4.west);
+  \draw[barr] (p6.east) -- (d1.west);
+\end{tikzpicture}
+\end{center}
+
+\noindent{\footnotesize\textbf{Legenda:} \emph{P\textit{n}} = proces aplikacji (np. logowanie, obsługa wizyt); \emph{D\textit{n}} = magazyn danych / data store (baza, sesje, pliki, poczta). Strzałka dwustronna oznacza zapis i odczyt.}
+
+\subsection{Kluczowe przepływy (opis)}
+
+\begin{tabularx}{\textwidth}{@{}c L L L@{}}
+\toprule
+\textbf{ID} & \textbf{Przepływ} & \textbf{Dane} & \textbf{Trust boundary} \\
+\midrule
+F1 & Logowanie $\rightarrow$ uwierzytelnianie $\rightarrow$ baza użytkowników (MySQL) i sesje (Redis) & Identyfikator, hasło, identyfikator sesji & Tak (Internet/lab $\rightarrow$ aplikacja) \\
+F2 & Rezerwacja wizyty $\rightarrow$ moduł wizyt $\rightarrow$ baza (MySQL) & Termin, lekarz, pacjent & Tak + kontrola roli \\
+F3 & Notatka lekarza $\rightarrow$ moduł kart i notatek $\rightarrow$ baza (MySQL) & Treść medyczna & Tak + kontrola dostępu lekarz$\leftrightarrow$pacjent \\
+F4 & Upload pliku $\rightarrow$ moduł załączników $\rightarrow$ magazyn plików (MinIO) & Plik binarny + metadane w bazie (MySQL) & Tak; ryzyko path traversal / RCE \\
+F5 & Reset hasła $\rightarrow$ moduł resetu $\rightarrow$ poczta labowa (Mailhog) & Token, link resetujący & Mailhog w labie = czytelny plaintext \\
+F6 & Zarządzanie użytkownikami (admin) $\rightarrow$ moduł administracji $\rightarrow$ baza (MySQL) & Role, hasła (hash) & Krytyczna powierzchnia \\
+\bottomrule
+\end{tabularx}
+
+\section{Analiza STRIDE}
+
+Legenda wpływu: \textbf{C} Critical \textbullet{} \textbf{H} High \textbullet{} \textbf{M} Medium \textbullet{} \textbf{L} Low.
+
+\subsection{P1 — Uwierzytelnianie i sesje}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{2.6cm} L c l@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} & \textbf{Aktywo} \\
+\midrule
+S Spoofing & Przejęcie sesji (przewidywalne ID, brak \texttt{HttpOnly}/\texttt{Secure}, sesja w Redis bez należytej izolacji) & H & A1, A2 \\
+T Tampering & Modyfikacja cookie / payloadu resetu & H & A1, A5 \\
+R Repudiation & Brak wiarygodnych logów logowań & L & A8 \\
+I Info disclosure & Enumeration użytkowników na loginie/resecie & M & A1 \\
+D DoS & Flood logowań / fill Redis & L* & A2 \\
+E Elevation & Pacjent $\rightarrow$ admin przez wadliwą zmianę roli / IDOR na profilu & C & A1 \\
+\bottomrule
+\end{tabularx}
+
+\vspace{0.3em}
+\noindent{\footnotesize *DoS hosta — out of scope; DoS aplikacji w labie — ograniczony.}
+
+\subsection{P2 — Wizyty}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L c@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} \\
+\midrule
+S & Podszywanie się pod pacjenta przy tworzeniu wizyty (brak spójności \texttt{patient\_id} z sesją) & H \\
+T & Zmiana \texttt{appointment\_id} / statusu wizyty (IDOR) & H \\
+I & Odczyt cudzych wizyt przez manipulację ID & H \\
+E & Recepcja wykonuje akcje zarezerwowane dla admina & H \\
+\bottomrule
+\end{tabularx}
+
+\subsection{P3 — Karty i notatki}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L c@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} \\
+\midrule
+T & Podmiana notatki innego lekarza & H \\
+I & Wyciek notatek (IDOR, brak filtra „przypisany pacjent”) & C/H \\
+T/I & Stored XSS w notatce $\rightarrow$ sesja innego użytkownika & H \\
+\bottomrule
+\end{tabularx}
+
+\subsection{P4 — Załączniki (MinIO)}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L c@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} \\
+\midrule
+T & Upload bypass (Content-Type, podwójne rozszerzenie, path traversal w nazwie) & H \\
+E & Łańcuch upload $\rightarrow$ wykonanie kodu (RCE) & C \\
+I & Publiczny / zgadywalny URL obiektu MinIO & H \\
+S & Użycie skradzionych kluczy MinIO & H \\
+\bottomrule
+\end{tabularx}
+
+\subsection{P5 — Reset hasła i poczta}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L c@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} \\
+\midrule
+S/E & Token resetu przewidywalny / wielokrotnego użytku / bez wygaśnięcia & H \\
+I & Odczyt tokenów z Mailhog UI (w labie zamierzone; w produkcji = krytyczna luka procesu) & H \\
+T & Podmiana adresu e-mail w procesie resetu & H \\
+\bottomrule
+\end{tabularx}
+
+\subsection{P6 — Administracja}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}c L c@{}}
+\toprule
+\normalfont\textbf{Threat} & \textbf{Opis} & \textbf{Wpływ} \\
+\midrule
+E & Broken access control — endpointy admin bez sprawdzenia roli & C \\
+T & Masowa zmiana ról & C \\
+I & Listing wszystkich użytkowników i metadanych & M \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Komponenty infrastrukturalne}
+
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}l L L@{}}
+\toprule
+\normalfont\textbf{Element} & \textbf{Zagrożenia (STRIDE)} & \textbf{Komentarz} \\
+\midrule
+Nginx & T: request smuggling / zła podmiana nagłówków; R: słabe logi; I: server version, path disclosure & Misconfig proxy \\
+PHP-FPM & E: \textbf{CVE 2026 $\rightarrow$ RCE} & Primary critical path etapu II \\
+MySQL & S: słabe credsy; I: SQLi na legacy endpoint & Część zapytań celowo słaba \\
+Redis & S: brak auth; T: nadpisanie sesji; I: dump kluczy; E: session as admin & — \\
+MinIO & I: listing bucket & Polityki zbyt luźne \\
+Mailhog & I: plaintext maili & Tylko lab — opisać jako ryzyko procesu \\
+Debian/obrazy & I: pakiety z CVE (Trivy/Lynis) & Low/Info + ewentualne High \\
+\bottomrule
+\end{tabularx}
+
+\section{Ocena ryzyka (macierz jakościowa)}
+
+Skala: Prawdopodobieństwo $\times$ Wpływ $\rightarrow$ Ryzyko (1–5).
+
+\begin{tabularx}{\textwidth}{@{}c L c c c L@{}}
+\toprule
+\textbf{ID} & \textbf{Zagrożenie} & \textbf{P} & \textbf{W} & \textbf{Ryzyko} & \textbf{Priorytet testów} \\
+\midrule
+R1 & RCE przez podatny PHP (CVE 2026) & 4 & 5 & \textbf{5} & \textcolor{crit}{Critical — RoE} \\
+R2 & RCE/łańcuch przez upload & 3 & 5 & \textbf{5} & \textcolor{crit}{Critical} \\
+R3 & IDOR na karty/notatki/wizyty & 5 & 4 & \textbf{5} & \textcolor{high}{High} \\
+R4 & Vertical privilege escalation (rola) & 4 & 5 & \textbf{5} & \textcolor{crit}{Critical/High} \\
+R5 & Stored XSS $\rightarrow$ session theft & 4 & 4 & \textbf{4} & High/Medium \\
+R6 & Słaby reset hasła + Mailhog & 4 & 4 & \textbf{4} & High/Medium \\
+R7 & Session fixation / Redis misconfig & 3 & 4 & \textbf{4} & Medium \\
+R8 & SQLi (legacy search/report) & 3 & 4 & \textbf{4} & Medium/High \\
+R9 & Information disclosure (wersje, nagłówki, Trivy) & 5 & 2 & \textbf{3} & Low/Info \\
+R10 & Enumeration kont & 4 & 2 & \textbf{2} & Low \\
+\bottomrule
+\end{tabularx}
+
+\vspace{0.4em}
+
+\section{Mitigacje}
+
+Podział: \textbf{M-PROD} = rekomendacja dla „prawdziwego” NovaMed; \textbf{M-LAB} = stan zamierzony w labie (celowa słabość lub częściowa kontrola).
+
+\begin{tabularx}{\textwidth}{@{}l L L@{}}
+\toprule
+\textbf{ID ryzyka} & \textbf{Mitigacje rekomendowane (M-PROD)} & \textbf{Stan labu (M-LAB)} \\
+\midrule
+R1 & Pinowanie/patch PHP, SBOM + Trivy w CI, minimalny obraz, WAF & Świadomie podatna wersja PHP pod CVE 2026 \\
+R2 & Antywirus/scan upload, magazyn poza webroot, podpisane URL, konwersja plików & Częściowa whitelist + obejścia; możliwy łańcuch RCE \\
+R3–R4 & Mandatory authz per resource (\texttt{owner}/\texttt{assignment}), testy ABAC, IDOR testy w CI & Role istnieją, ale celowe braki sprawdzeń \\
+R5 & Escape kontekstowy, CSP, sanitizacja HTML (allowlista) & Sanitizacja niespójna między widokami \\
+R6 & Tokeny kryptograficznie silne, jednorazowe, TTL; brak plaintext mail w prod & Mailhog + słabszy token (medium) \\
+R7 & Redis AUTH, sesje rotowane po loginie, flagi cookie & Uproszczona konfiguracja sesji \\
+R8 & Wyłącznie prepared statements, ORM, WAF SQLi & Główne CRUD OK; legacy endpoint podatny \\
+R9 & Ukrycie wersji, hardening nagłówków, patch images & Część findingów zostawiona pod Lynis/Trivy \\
+R10 & Jednolite komunikaty błędów logowania & Enumeration możliwa (Low) \\
+\bottomrule
+\end{tabularx}
+
+\vspace{0.5em}
+\noindent Dodatkowe mitigacje procesowe (SoW):
+\begin{itemize}[leftmargin=*]
+  \item Procedura RoE przy Critical.
+  \item Re-test Critical/High.
+  \item Segregacja sekretów (\texttt{.env} poza obrazem publicznym — w labie i tak lokalnie).
+\end{itemize}
+
+\section{Założenia i ograniczenia modelu}
+\begin{enumerate}[leftmargin=*]
+  \item Atakujący ma dostęp sieciowy do portów labowych MediSlot (w rzeczywistości: localhost zespołu).
+  \item Brak osobnego IdP (Keycloak) — tożsamość w aplikacji PHP.
+  \item Mailhog \textbf{nie modeluje} bezpieczeństwa prawdziwego SMTP; findingi z odczytu skrzynki traktować jako ryzyko procesu / lab-only z rekomendacją na produkcję.
+  \item Threat model nie obejmuje fizycznego dostępu do hosta ani supply-chain IDE/CI poza obrazami Docker użytymi w Compose.
+  \item Celowe podatności są częścią projektu dydaktycznego; mitigacje M-PROD pozostają wiążące dla raportu końcowego („co klient powinien zrobić”).
+\end{enumerate}
+
+\section{Wnioski}
+\begin{enumerate}[leftmargin=*]
+  \item Najcenniejsze aktywa to \textbf{dokumentacja medyczna (A3/A4)} oraz \textbf{runtime aplikacji (A7)} — ich kompromitacja definiuje Critical.
+  \item Największe ryzyka przed testem: \textbf{RCE (PHP CVE + upload)} oraz \textbf{broken access control między 4 rolami} — zgodne z happy path MediSlot.
+  \item Stack 7 komponentów daje wystarczającą powierzchnię na findingi z Trivy/Lynis (Low/Info)
+  \item DFD Level 1 wskazuje jasne trust boundaries przy P1/P4/P5
+  \item SoW (scope In/Out + RoE) jest spójny z tym modelem: testujemy lab Compose, eskalujemy Critical do kontaktu RoE, re-testujemy po patchach.
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,4 @@
+.superpowers/
+mysql_data/
+minio_data/
+*.log

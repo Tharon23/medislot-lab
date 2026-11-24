@@ -1,0 +1,162 @@
+% Stage 1 presentation: MediSlot pentest project overview (max 5 slides).
+% Build: pdflatex stage-1-presentation.tex (run twice).
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{caption}[numbered]
+
+\definecolor{crit}{HTML}{B00020}
+\definecolor{high}{HTML}{C8651B}
+
+\title[MediSlot — pentest]{Test penetracyjny środowiska MediSlot}
+\subtitle{NovaMed Sp. z o.o. — etap I (SoW + Threat Model)}
+\author[SecureTrio]{Zespół SecureTrio: Kamil \and Bartek \and Kuba}
+\institute[AGH]{Testy penetracyjne — projekt zaliczeniowy, AGH}
+\date{24.10.2026}
+
+\begin{document}
+
+% ---------- Slajd 1: tytuł ----------
+\begin{frame}[plain]
+  \titlepage
+  \begin{center}
+    \footnotesize Lab lokalny (Docker Compose) \textbullet{} dane syntetyczne \textbullet{} model grey-box
+  \end{center}
+\end{frame}
+
+% ---------- Slajd 2: co testujemy + zakres ----------
+\begin{frame}{Co testujemy: MediSlot i stack labowy}
+  \textbf{MediSlot} — portal przychodni: rejestracja wizyt, dokumentacja pacjentów (syntetyczna), 4 role (pacjent, lekarz, recepcja, admin).
+
+  \begin{columns}[T]
+    \begin{column}{0.52\textwidth}
+      \begin{block}{Technologie (7 komponentów, Docker Compose)}
+        \footnotesize
+        \begin{itemize}
+          \item \textbf{Nginx} — reverse proxy
+          \item \textbf{PHP-FPM} — aplikacja MediSlot
+          \item \textbf{MySQL} — baza danych
+          \item \textbf{Redis} — magazyn sesji
+          \item \textbf{MinIO} — załączniki (S3)
+          \item \textbf{Mailhog} — poczta labowa
+          \item \textbf{Debian} — warstwa OS kontenerów
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Zakres}
+        \footnotesize
+        \textbf{In scope:} aplikacja, API HTTP, konfiguracja usług, ruch w sieci Compose (\texttt{localhost}), kontrola dostępu między rolami, łańcuchy do RCE.\\[0.4em]
+        \textbf{Out of scope:} host Windows / Docker Desktop, sieci poza labem, prawdziwe dane/PII, DoS hosta, infrastruktura AGH.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------- Slajd 3: plan, metodyka, narzędzia ----------
+\begin{frame}{Plan, metodyka i narzędzia}
+  \begin{columns}[T]
+    \begin{column}{0.54\textwidth}
+      \begin{block}{Plan (etapy projektu)}
+        \footnotesize
+        \begin{enumerate}
+          \item \textbf{Etap I} — SoW + Threat Model (+ ta prezentacja)
+          \item \textbf{Etap II} — testy: discovery $\rightarrow$ atak $\rightarrow$ dowody
+          \item \textbf{Etap III} — raport końcowy + re-testy
+        \end{enumerate}
+      \end{block}
+      \begin{block}{Metodyka}
+        \footnotesize
+        PTES / OWASP Testing Guide + mapowanie na \textbf{STRIDE} z threat modelu. Każdy finding: opis, reprodukcja, dowód, CWE, CVSS, CVE, remediacja.
+      \end{block}
+    \end{column}
+    \begin{column}{0.46\textwidth}
+      \begin{block}{Narzędzia}
+        \footnotesize
+        \begin{itemize}
+          \item Proxy: \textbf{Burp} / \textbf{ZAP}
+          \item \textbf{sqlmap} — SQLi
+          \item \textbf{Trivy} — skan obrazów / CVE
+          \item \textbf{Lynis} — audyt OS
+          \item \textbf{Nuclei} + własne skrypty HTTP
+        \end{itemize}
+      \end{block}
+      \begin{block}{Docelowo}
+        \footnotesize $\sim$15–20 findingów: kilka Critical/High, większość Medium, reszta Low/Info.
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% ---------- Slajd 4: podatność 2026 + top ryzyka ----------
+\begin{frame}{Podatność z 2026 i top ryzyka}
+  \begin{block}{Główny tor Critical — podatność 2026}
+    \footnotesize
+    Celowo podatna wersja \textbf{PHP-FPM} z \textbf{CVE z 2026 r.} prowadząca do \textbf{RCE} (pełne przejęcie kontenera aplikacji). Discovery przez fingerprinting / skan obrazu (Trivy), potwierdzenie eksploatacją w granicach RoE.
+  \end{block}
+
+  \centering
+  \footnotesize
+  \begin{tabular}{@{}llccl@{}}
+    \toprule
+    \textbf{ID} & \textbf{Zagrożenie} & \textbf{P} & \textbf{W} & \textbf{Priorytet} \\
+    \midrule
+    R1 & RCE przez podatny PHP (CVE 2026) & 4 & 5 & \textcolor{crit}{Critical — RoE} \\
+    R2 & RCE/łańcuch przez upload (MinIO) & 3 & 5 & \textcolor{crit}{Critical} \\
+    R3 & IDOR na karty / notatki / wizyty & 5 & 4 & \textcolor{high}{High} \\
+    R4 & Vertical privilege escalation (rola) & 4 & 5 & \textcolor{crit}{Critical/High} \\
+    R5 & Stored XSS $\rightarrow$ przejęcie sesji & 4 & 4 & High/Medium \\
+    R6 & Słaby reset hasła + Mailhog & 4 & 4 & High/Medium \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.4em}
+  {\footnotesize P = prawdopodobieństwo, W = wpływ (skala 1–5).}
+\end{frame}
+
+% ---------- Slajd 5: scenariusz testera vs obrona (SOC) + RoE ----------
+\begin{frame}{Scenariusz testera vs obrona (SOC)}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Scenariusz testera (atak)}
+        \footnotesize
+        \begin{enumerate}
+          \item Fingerprinting PHP / skan obrazów
+          \item Kontrola dostępu / IDOR na wizytach i kartach
+          \item Upload / Stored XSS / reset hasła
+          \item Eksploatacja \textbf{CVE PHP} jako tor Critical (RCE)
+        \end{enumerate}
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Scenariusz obrony (wiedza SOC)}
+        \footnotesize
+        \begin{itemize}
+          \item Logi aplikacji: logowania, błędy, upload
+          \item Access/error logi Nginx
+          \item Skan obrazów (Trivy) — alert przy krytycznym CVE
+          \item Możliwość wyłączenia konta; brak WAF w labie
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+
+  \begin{block}{Procedura RoE przy ustaleniu Critical}
+    \footnotesize
+    Natychmiastowy kontakt z RoE (Bartek) $\rightarrow$ wstrzymanie eksploatacji wektora $\rightarrow$ notatka (timing, wektor, wpływ) $\rightarrow$ dyspozycja (kontynuuj / wstrzymaj / zbierz logi). Re-test findingów Critical i High po patchu.
+  \end{block}
+
+  \centering\footnotesize Dziękujemy — pytania? \quad\textbullet\quad Dokumenty: SoW + Threat Model (etap I).
+\end{frame}
+
+\end{document}
