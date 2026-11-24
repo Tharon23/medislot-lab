@@ -3,3 +3,5 @@ mysql_data/
 minio_data/
 *.log
 .cursor/
+app/uploads/*
+!app/uploads/.gitkeep
