@@ -18,5 +18,5 @@ $body = '<div class="auth-card"><div class="brand big">+ ' . APP_NAME . '</div>'
       . '<form method="post" action="/login.php">'
       . '<label>Email<input type="text" name="email" value="' . h($email) . '" autofocus></label>'
       . '<label>Password<input type="password" name="password"></label>'
-      . '<button class="btn" type="submit">Sign in</button></form></div>';
+      . '<button class="btn" type="submit">Sign in</button></form><p><a href="/reset_request.php">Forgot password?</a></p></div>';
 render('Sign in', $body);

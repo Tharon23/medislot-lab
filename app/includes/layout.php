@@ -6,9 +6,9 @@ function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES,
 function nav_items(string $role): array {
     $items = ['Dashboard' => '/dashboard.php'];
     switch ($role) {
-        case 'patient':   $items += ['My appointments' => '#', 'My records' => '#']; break;
-        case 'doctor':    $items += ['My patients' => '#', 'Notes' => '#']; break;
-        case 'reception': $items += ['Schedule' => '#', 'Patients' => '#']; break;
+        case 'patient':   $items += ['My appointments' => '/appointment_list.php', 'Book appointment' => '/appointment.php', 'My notes' => '/note_view.php', 'Attachments' => '/upload.php']; break;
+        case 'doctor':    $items += ['Appointments' => '/appointment_list.php', 'Write note' => '/note.php', 'Notes' => '/note_view.php', 'Attachments' => '/upload.php']; break;
+        case 'reception': $items += ['Schedule' => '/appointment_list.php', 'Attachments' => '/upload.php']; break;
         case 'admin':     $items += ['Users' => '#', 'Roles' => '#']; break;
     }
     return $items;

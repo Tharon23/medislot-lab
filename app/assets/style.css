@@ -35,3 +35,9 @@ tbody tr:hover{background:#f6fbfb}
 .auth-card .btn{width:100%}
 .alert{background:var(--warn);color:var(--warnink);padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px}
 @media(max-width:700px){.shell{flex-direction:column}.sidebar{width:100%}.content{padding:16px}}
+.form label{display:block;margin-bottom:14px;font-size:13px;color:var(--muted);max-width:520px}
+.form input,.form select,.form textarea{display:block;width:100%;margin-top:4px;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;color:var(--ink)}
+.form textarea{min-height:140px}
+.ok{background:#e6f6ee;color:#1d6b43;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px}
+.note-body{border:1px solid var(--line);border-radius:8px;padding:14px;background:#fafdfd}
+.inline{display:inline}
