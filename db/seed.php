@@ -82,5 +82,16 @@ $at = $pdo->prepare('INSERT INTO attachments (patient_id,object_key,filename,con
 $at->execute([$pats[0], 'patient1/blood-test-2026.pdf', 'blood-test-2026.pdf', 'application/pdf', 1]);
 $at->execute([$pats[1], 'patient2/xray-lumbar.png', 'xray-lumbar.png', 'image/png', 1]);
 
+// Seed the actual MinIO objects so downloads resolve and #11 (public bucket, guessable keys)
+// is demonstrable on seeded data. Synthetic bytes only. Runs in the php container.
+if (is_file('/var/www/html/includes/minio.php')) {
+    require_once '/var/www/html/includes/minio.php';
+    minio_ensure_bucket();
+    minio_put_object('patient1/blood-test-2026.pdf',
+        "%PDF-1.4\n% Synthetic lab blood-test report. Not real PHI.\n", 'application/pdf');
+    minio_put_object('patient2/xray-lumbar.png',
+        "\x89PNG\r\n\x1a\n" . str_repeat("\0", 64), 'image/png');
+}
+
 echo "Seed OK: " . $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() . " users, "
    . count($pats) . " patients, " . count($docs) . " doctors\n";

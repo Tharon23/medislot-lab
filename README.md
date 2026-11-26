@@ -1,6 +1,10 @@
 # MediSlot Lab
 
-Deliberately vulnerable PHP clinic portal for a university pentest course. Local use only; synthetic data only. Do not expose to a network.
+Deliberately vulnerable PHP clinic portal for a university pentest course.
+
+> **Lab only.** This application contains intentional, exploitable vulnerabilities.
+> Run it on localhost with Docker only. Do not deploy it, expose it to any network,
+> or load real data into it. All seed data is synthetic.
 
 ## Run
 
@@ -10,8 +14,10 @@ Deliberately vulnerable PHP clinic portal for a university pentest course. Local
 | Service | URL |
 |---|---|
 | Web app | http://localhost:8080 |
-| Mailhog UI | http://localhost:8025 |
+| Mailhog UI (reset emails) | http://localhost:8025 |
 | MinIO API / console | http://localhost:9000 / http://localhost:9001 |
+
+MinIO console login: `minioadmin` / `minioadmin123` (from `.env`).
 
 MySQL and Redis are reachable only inside the Compose network.
 

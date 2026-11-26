@@ -14,9 +14,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($u['role'] === 'patient' || $u['role'] === 'reception') {
         $pid = $u['role'] === 'patient' ? patient_id_for((int)$u['id']) : (int)($_POST['patient_id'] ?? 0);
-        $pdo->prepare('INSERT INTO appointments (patient_id,doctor_id,starts_at,reason) VALUES (?,?,?,?)')
-            ->execute([$pid, (int)$_POST['doctor_id'], str_replace('T', ' ', $_POST['starts_at']) . ':00', $_POST['reason'] ?? '']);
-        $msg = '<div class="ok">Appointment booked.</div>';
+        $doctorId = (int)($_POST['doctor_id'] ?? 0);
+        $when = trim((string)($_POST['starts_at'] ?? ''));
+        if ($pid && $doctorId && $when !== '') {
+            $pdo->prepare('INSERT INTO appointments (patient_id,doctor_id,starts_at,reason) VALUES (?,?,?,?)')
+                ->execute([$pid, $doctorId, str_replace('T', ' ', $when) . ':00', $_POST['reason'] ?? '']);
+            $msg = '<div class="ok">Appointment booked.</div>';
+        } else {
+            $msg = '<div class="alert">Could not book: missing patient, doctor or time.</div>';
+        }
     }
 }
 
