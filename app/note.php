@@ -4,10 +4,22 @@ require_role('doctor');
 $u = current_user();
 $pdo = db();
 $did = doctor_id_for((int)$u['id']);
+
+// INTENTIONAL (#7): naive single-pass XSS blacklist. Removes the substring "script" once
+// and strips whitespace-delimited on<handler>= attributes. Neutralises the obvious
+// <script>alert(1)</script> and <img src=x onerror=...>. Defeated by:
+//   - keyword re-forming after one removal: <scrscriptipt>...</scrscriptipt> -> <script>...</script>
+//   - an event handler not preceded by whitespace: <svg/onload=alert(1)> (the "/" dodges the filter)
+// The result is stored and later rendered raw by note_view.php, firing in the viewer's session.
+function note_filter(string $s): string {
+    $s = str_ireplace('script', '', $s);
+    $s = preg_replace('/\son\w+\s*=/i', ' ', $s);
+    return $s;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // INTENTIONAL (#7): body stored raw as submitted (naive filter added in Task 5).
     $pdo->prepare('INSERT INTO notes (patient_id,doctor_id,body_html) VALUES (?,?,?)')
-        ->execute([(int)$_POST['patient_id'], $did, $_POST['body_html'] ?? '']);
+        ->execute([(int)$_POST['patient_id'], $did, note_filter((string)($_POST['body_html'] ?? ''))]);
     header('Location: /note_view.php?ref=' . ref_encode((int)$pdo->lastInsertId())); exit;
 }
 $st = $pdo->prepare('SELECT p.id, pu.full_name FROM assignments s JOIN patients p ON p.id=s.patient_id JOIN users pu ON pu.id=p.user_id WHERE s.doctor_id=?');

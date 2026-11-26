@@ -9,8 +9,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($uid) {
         $token = md5($uid . RESET_SALT);   // INTENTIONAL (#8): predictable, no expiry, reusable
         db()->prepare('INSERT INTO password_resets (user_id,token) VALUES (?,?)')->execute([$uid, $token]);
+        // INTENTIONAL (#14): the reset link host is taken from the attacker-controllable Host header.
+        // A tampered Host sends the victim a link pointing at an attacker domain -> token/takeover.
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
         send_mail($_POST['email'], 'MediSlot password reset',
-            "Reset your password:\nhttp://localhost:8080/reset.php?u=$uid&token=$token\n");
+            "Reset your password:\nhttp://$host/reset.php?u=$uid&token=$token\n");
     }
     $msg = '<div class="ok">If the account exists, a reset link was sent.</div>';
 }
