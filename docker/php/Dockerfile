@@ -9,3 +9,4 @@ RUN apt-get update \
  && docker-php-ext-enable redis
 
 COPY php.ini /usr/local/etc/php/conf.d/zz-medislot.ini
+COPY zz-medislot.conf /usr/local/etc/php-fpm.d/zz-medislot.conf

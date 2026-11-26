@@ -10,20 +10,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['file']) && $_FILES['
     $name = basename($_FILES['file']['name']);
     $type = $_FILES['file']['type'] ?: 'application/octet-stream';
     $bytes = file_get_contents($_FILES['file']['tmp_name']);
-    // INTENTIONAL (#11): sequential, guessable keys derived from the row id.
-    $pdo->prepare('INSERT INTO attachments (patient_id,object_key,filename,content_type,uploaded_by) VALUES (?,?,?,?,?)')
-        ->execute([$pid, 'pending', $name, $type, $u['id']]);
-    $id = (int)$pdo->lastInsertId();
-    $key = sprintf('att-%06d-%s', $id, $name);
-    minio_ensure_bucket();
-    if (minio_put_object($key, $bytes, $type)) {
-        $pdo->prepare('UPDATE attachments SET object_key=? WHERE id=?')->execute([$key, $id]);
-        // Staging copy in web-reachable uploads/ (sink for later tasks).
-        @file_put_contents(__DIR__ . '/uploads/' . $key, $bytes);
-        $msg = '<div class="ok">Uploaded.</div>';
+    // INTENTIONAL (#2): naive upload filter — extension blacklist + magic-byte sniff only.
+    // Blocks bare `.php` and any content that does not begin with an image/PDF signature.
+    // Bypass: name the file `.phtml` (not blacklisted) AND prepend a `GIF89a` magic prefix
+    // (polyglot). Nginx routes `.phtml` to PHP-FPM, so the webshell executes from /uploads/.
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $sig = substr($bytes, 0, 8);
+    $looksImage = strncmp($sig, 'GIF87a', 6) === 0 || strncmp($sig, 'GIF89a', 6) === 0
+        || strncmp($sig, "\x89PNG\r\n\x1a\n", 8) === 0 || strncmp($sig, "\xFF\xD8\xFF", 3) === 0
+        || strncmp($sig, '%PDF', 4) === 0;
+    if (in_array($ext, ['php', 'php5', 'phps', 'phar'], true) || !$looksImage) {
+        $msg = '<div class="alert">Rejected: only image or PDF attachments are allowed.</div>';
     } else {
-        $pdo->prepare('DELETE FROM attachments WHERE id=?')->execute([$id]);
-        $msg = '<div class="alert">Storage error.</div>';
+        // INTENTIONAL (#11): sequential, guessable keys derived from the row id.
+        $pdo->prepare('INSERT INTO attachments (patient_id,object_key,filename,content_type,uploaded_by) VALUES (?,?,?,?,?)')
+            ->execute([$pid, 'pending', $name, $type, $u['id']]);
+        $id = (int)$pdo->lastInsertId();
+        $key = sprintf('att-%06d-%s', $id, $name);
+        minio_ensure_bucket();
+        if (minio_put_object($key, $bytes, $type)) {
+            $pdo->prepare('UPDATE attachments SET object_key=? WHERE id=?')->execute([$key, $id]);
+            // Staging copy in web-reachable uploads/ (sink for later tasks).
+            @file_put_contents(__DIR__ . '/uploads/' . $key, $bytes);
+            $msg = '<div class="ok">Uploaded.</div>';
+        } else {
+            $pdo->prepare('DELETE FROM attachments WHERE id=?')->execute([$id]);
+            $msg = '<div class="alert">Storage error.</div>';
+        }
     }
 }
 $body = $msg . '<section class="card"><form class="form" method="post" action="/upload.php" enctype="multipart/form-data">'
