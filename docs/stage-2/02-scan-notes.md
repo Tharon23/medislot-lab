@@ -23,7 +23,8 @@ Command (run from the repo root, Docker socket mounted):
       aquasec/trivy:latest image --scanners vuln medislot-php:latest
 
 - Target: `medislot-php:latest` (Debian 13.7 base, `php:8.3.35-fpm`).
-- Totals: **2588 OS-package vulnerabilities** — LOW 1013, MEDIUM 1326, HIGH 245, CRITICAL 4.
+- Totals: **2630 OS-package vulnerabilities** — UNKNOWN 42, LOW 1012, MEDIUM 1328, HIGH 244, CRITICAL 4.
+  (Earlier build of the base image reported 2588; totals drift as the Debian base is refreshed.)
 - Representative CRITICAL CVEs: `CVE-2026-111497`, `CVE-2026-6653`, `CVE-2026-99083`
   (affected packages include `libxml2`, `libbrotli1`, and the Debian kernel headers).
 - These are inherited from the base image, independent of the deliberately pinned
