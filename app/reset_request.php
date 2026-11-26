@@ -12,11 +12,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // INTENTIONAL (#14): the reset link host is taken from the attacker-controllable Host header.
         // A tampered Host sends the victim a link pointing at an attacker domain -> token/takeover.
         $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
-        send_mail($_POST['email'], 'MediSlot password reset',
-            "Reset your password:\nhttp://$host/reset.php?u=$uid&token=$token\n");
+        send_mail($_POST['email'], 'MediSlot - reset hasła',
+            "Zresetuj swoje hasło:\nhttp://$host/reset.php?u=$uid&token=$token\n");
     }
-    $msg = '<div class="ok">If the account exists, a reset link was sent.</div>';
+    $msg = '<div class="ok">Jeśli konto istnieje, link do resetu został wysłany.</div>';
 }
-render('Reset password', '<div class="auth-card"><div class="brand big">+ ' . APP_NAME . '</div>' . $msg
-  . '<form method="post" action="/reset_request.php"><label>Email<input type="text" name="email" autofocus></label>'
-  . '<button class="btn" type="submit">Send reset link</button></form><p><a href="/login.php">Back to sign in</a></p></div>');
+render('Reset hasła', '<div class="auth-card"><div class="brand big">+ ' . APP_NAME . '</div>' . $msg
+  . '<form method="post" action="/reset_request.php"><label>E-mail<input type="text" name="email" autofocus></label>'
+  . '<button class="btn" type="submit">Wyślij link</button></form><p><a href="/login.php">Powrót do logowania</a></p></div>');

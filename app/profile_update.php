@@ -27,10 +27,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $st = $pdo->prepare('SELECT phone, address FROM patients WHERE user_id=?');
 $st->execute([$u['id']]);
 $p = $st->fetch() ?: ['phone' => '', 'address' => ''];
-if (!empty($_GET['saved'])) $msg = '<div class="ok">Profile saved.</div>';
+if (!empty($_GET['saved'])) $msg = '<div class="ok">Profil zapisany.</div>';
 $body = $msg . '<section class="card"><form class="form" method="post" action="/profile_update.php">'
-  . '<label>Full name<input type="text" value="' . h($u['full_name']) . '" disabled></label>'
-  . '<label>Phone<input type="text" name="phone" value="' . h((string)$p['phone']) . '"></label>'
-  . '<label>Address<input type="text" name="address" value="' . h((string)$p['address']) . '"></label>'
-  . '<button class="btn" type="submit">Save</button></form></section>';
-render('My profile', $body);
+  . '<label>Imię i nazwisko<input type="text" value="' . h($u['full_name']) . '" disabled></label>'
+  . '<label>Telefon<input type="text" name="phone" value="' . h((string)$p['phone']) . '"></label>'
+  . '<label>Adres<input type="text" name="address" value="' . h((string)$p['address']) . '"></label>'
+  . '<button class="btn" type="submit">Zapisz</button></form></section>';
+render('Mój profil', $body);

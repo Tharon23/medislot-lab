@@ -59,7 +59,7 @@ DID=$(sqlq "SELECT id FROM doctors ORDER BY id LIMIT 1;")
 RJ="$TMP/h_reception.jar"
 r=$(curl -s -b "$RJ" --data-urlencode "patient_id=$PID" --data-urlencode "doctor_id=$DID" \
   --data-urlencode "starts_at=2027-01-15T09:30" --data-urlencode "reason=Happy-path test" "$BASE/appointment.php")
-echo "$r" | grep -q "Appointment booked" && pass "reception booked appointment" || fail "booking failed"
+echo "$r" | grep -q "Wizyta umówiona" && pass "reception booked appointment" || fail "booking failed"
 # doctor writes + views a note
 DJ="$TMP/h_doctor.jar"; npid=$(curl -s -b "$DJ" "$BASE/note.php" | grep -o 'value="[0-9]*"' | head -1 | grep -o '[0-9]*')
 loc=$(curl -s -b "$DJ" -D - -o /dev/null --data-urlencode "patient_id=$npid" \
@@ -70,11 +70,11 @@ curl -s -b "$DJ" "$BASE/note_view.php?ref=$nref" | grep -q "Benign happy-path no
 PJ="$TMP/h_patient.jar"; printf 'GIF89a;happy' > "$TMP/h.gif"
 up=$(curl -s -b "$PJ" -F "file=@$(winpath "$TMP/h.gif");type=image/gif" "$BASE/upload.php")
 key=$(echo "$up" | grep -o 'att-[0-9]*-h\.gif' | head -1)
-{ echo "$up" | grep -q "Uploaded" && [ -n "$key" ]; } && pass "patient uploaded attachment" || fail "upload failed"
+{ echo "$up" | grep -q "Przesłano" && [ -n "$key" ]; } && pass "patient uploaded attachment" || fail "upload failed"
 dcode=$(curl -s -b "$PJ" -o /dev/null -w '%{http_code}' "$BASE/download.php?file=$key")
 [ "$dcode" = "200" ] && pass "patient downloaded attachment" || fail "download failed ($dcode)"
 # seeded attachment resolves (object present)
-scode=$(curl -s -o /dev/null -w '%{http_code}' "$MINIO/$BUCKET/patient1/blood-test-2026.pdf")
+scode=$(curl -s -o /dev/null -w '%{http_code}' "$MINIO/$BUCKET/pacjent1/wynik-krwi-2026.pdf")
 [ "$scode" = "200" ] && pass "seeded MinIO object resolves" || fail "seeded object 404 ($scode)"
 # password reset -> link lands in Mailhog
 curl -s -o /dev/null --data-urlencode "email=pacjent1@novamed.lab" "$BASE/reset_request.php"

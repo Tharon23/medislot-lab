@@ -11,15 +11,15 @@ if ($u['role'] === 'patient') { $sql .= ' WHERE p.user_id=?'; $args[] = $u['id']
 elseif ($u['role'] === 'doctor') { $sql .= ' WHERE d.user_id=?'; $args[] = $u['id']; }
 $st = $pdo->prepare($sql . ' ORDER BY a.starts_at');
 $st->execute($args);
-$o = '<section class="card"><table><thead><tr><th>When</th><th>Patient</th><th>Doctor</th><th>Status</th><th>Reason</th><th></th></tr></thead><tbody>';
+$o = '<section class="card"><table><thead><tr><th>Termin</th><th>Pacjent</th><th>Lekarz</th><th>Status</th><th>Powód</th><th></th></tr></thead><tbody>';
 foreach ($st->fetchAll() as $r) {
     $ref = ref_encode((int)$r['id']);
     $o .= '<tr><td><a href="/appointment.php?ref=' . h($ref) . '">' . h($r['starts_at']) . '</a></td><td>' . h($r['pn']) . '</td><td>' . h($r['dn'])
-        . '</td><td>' . h($r['status']) . '</td><td>' . h($r['reason']) . '</td><td>';
+        . '</td><td>' . h(status_pl($r['status'])) . '</td><td>' . h($r['reason']) . '</td><td>';
     if ($r['status'] === 'scheduled') {
         $o .= '<form class="inline" method="post" action="/appointment.php"><input type="hidden" name="action" value="cancel">'
-            . '<input type="hidden" name="ref" value="' . h($ref) . '"><button class="btn btn-ghost" type="submit">Cancel</button></form>';
+            . '<input type="hidden" name="ref" value="' . h($ref) . '"><button class="btn btn-ghost" type="submit">Anuluj</button></form>';
     }
     $o .= '</td></tr>';
 }
-render('Appointments', $o . '</tbody></table></section>');
+render('Wizyty', $o . '</tbody></table></section>');

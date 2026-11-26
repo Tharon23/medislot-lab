@@ -3,13 +3,21 @@ require_once __DIR__ . '/auth.php';
 
 function h(?string $s): string { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
+// Display-only Polish labels; the stored role/status enum values stay in English (code identifiers).
+function role_pl(string $r): string {
+    return ['patient' => 'Pacjent', 'doctor' => 'Lekarz', 'reception' => 'Recepcja', 'admin' => 'Administrator'][$r] ?? $r;
+}
+function status_pl(string $s): string {
+    return ['scheduled' => 'zaplanowana', 'completed' => 'zakończona', 'cancelled' => 'anulowana'][$s] ?? $s;
+}
+
 function nav_items(string $role): array {
-    $items = ['Dashboard' => '/dashboard.php'];
+    $items = ['Pulpit' => '/dashboard.php'];
     switch ($role) {
-        case 'patient':   $items += ['My appointments' => '/appointment_list.php', 'Book appointment' => '/appointment.php', 'My notes' => '/note_view.php', 'Attachments' => '/upload.php', 'My profile' => '/profile_update.php']; break;
-        case 'doctor':    $items += ['Appointments' => '/appointment_list.php', 'Write note' => '/note.php', 'Notes' => '/note_view.php', 'Attachments' => '/upload.php']; break;
-        case 'reception': $items += ['Schedule' => '/appointment_list.php', 'Book appointment' => '/appointment.php', 'Attachments' => '/upload.php', 'Patient search' => '/search.php']; break;
-        case 'admin':     $items += ['Users' => '/admin_users.php', 'Roles' => '/admin_role.php', 'Patient search' => '/search.php']; break;
+        case 'patient':   $items += ['Moje wizyty' => '/appointment_list.php', 'Umów wizytę' => '/appointment.php', 'Moje notatki' => '/note_view.php', 'Załączniki' => '/upload.php', 'Mój profil' => '/profile_update.php']; break;
+        case 'doctor':    $items += ['Wizyty' => '/appointment_list.php', 'Dodaj notatkę' => '/note.php', 'Notatki' => '/note_view.php', 'Załączniki' => '/upload.php']; break;
+        case 'reception': $items += ['Grafik' => '/appointment_list.php', 'Umów wizytę' => '/appointment.php', 'Załączniki' => '/upload.php', 'Szukaj pacjenta' => '/search.php']; break;
+        case 'admin':     $items += ['Użytkownicy' => '/admin_users.php', 'Role' => '/admin_role.php', 'Szukaj pacjenta' => '/search.php']; break;
     }
     return $items;
 }
@@ -27,8 +35,8 @@ function render(string $title, string $bodyHtml): void {
             echo '<a href="' . $href . '">' . h($label) . '</a>';
         }
         echo '</nav></aside><div class="main"><header class="topbar"><span class="who">'
-           . h($u['full_name']) . ' <span class="badge badge-' . h($u['role']) . '">' . h($u['role']) . '</span></span>'
-           . '<a class="btn btn-ghost" href="/logout.php">Log out</a></header><main class="content"><h1>'
+           . h($u['full_name']) . ' <span class="badge badge-' . h($u['role']) . '">' . h(role_pl($u['role'])) . '</span></span>'
+           . '<a class="btn btn-ghost" href="/logout.php">Wyloguj</a></header><main class="content"><h1>'
            . h($title) . '</h1>' . $bodyHtml . '</main></div></div>';
     } else {
         echo '<main class="auth-wrap">' . $bodyHtml . '</main>';

@@ -13,10 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $body = '<div class="auth-card"><div class="brand big">+ ' . APP_NAME . '</div>'
-      . '<p class="muted">NovaMed clinic portal. Sign in to continue.</p>'
+      . '<p class="muted">Portal przychodni NovaMed. Zaloguj się, aby kontynuować.</p>'
       . ($error ? '<div class="alert">' . h($error) . '</div>' : '')
       . '<form method="post" action="/login.php">'
-      . '<label>Email<input type="text" name="email" value="' . h($email) . '" autofocus></label>'
-      . '<label>Password<input type="password" name="password"></label>'
-      . '<button class="btn" type="submit">Sign in</button></form><p><a href="/reset_request.php">Forgot password?</a></p></div>';
-render('Sign in', $body);
+      . '<label>E-mail<input type="text" name="email" value="' . h($email) . '" autofocus></label>'
+      . '<label>Hasło<input type="password" name="password"></label>'
+      . '<button class="btn" type="submit">Zaloguj</button></form><p><a href="/reset_request.php">Nie pamiętasz hasła?</a></p></div>';
+render('Logowanie', $body);

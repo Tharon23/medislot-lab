@@ -12,7 +12,7 @@ if (!empty($_GET['ref'])) {
 }
 $path = __DIR__ . '/uploads/' . $file;
 $data = is_file($path) ? file_get_contents($path) : minio_get_object($file);
-if ($data === null || $data === false) { http_response_code(404); echo 'Not found'; exit; }
+if ($data === null || $data === false) { http_response_code(404); echo 'Nie znaleziono'; exit; }
 header('Content-Type: application/octet-stream');
 header('Content-Disposition: attachment; filename="' . basename($file) . '"');
 header('Content-Length: ' . strlen($data));

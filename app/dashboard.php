@@ -13,7 +13,7 @@ function data_table(array $head, array $rows): string {
         foreach ($r as $c) $o .= '<td>' . h((string)$c) . '</td>';
         $o .= '</tr>';
     }
-    if (!$rows) $o .= '<tr><td colspan="' . count($head) . '" class="muted">Nothing here yet.</td></tr>';
+    if (!$rows) $o .= '<tr><td colspan="' . count($head) . '" class="muted">Brak danych.</td></tr>';
     return $o . '</tbody></table>';
 }
 function card_box(string $title, string $inner): string { return '<section class="card"><h2>' . h($title) . '</h2>' . $inner . '</section>'; }
@@ -25,9 +25,9 @@ switch ($u['role']) {
             JOIN patients p ON p.id=a.patient_id JOIN doctors d ON d.id=a.doctor_id JOIN users du ON du.id=d.user_id
             WHERE p.user_id=? ORDER BY a.starts_at');
         $q->execute([$u['id']]);
-        $rows = array_map(fn($r) => [$r['starts_at'], $r['full_name'], $r['specialty'], $r['status'], $r['reason']], $q->fetchAll());
-        $body = '<p class="lead">Welcome back, ' . h($u['full_name']) . '.</p>'
-              . card_box('My appointments', data_table(['When', 'Doctor', 'Specialty', 'Status', 'Reason'], $rows));
+        $rows = array_map(fn($r) => [$r['starts_at'], $r['full_name'], $r['specialty'], status_pl($r['status']), $r['reason']], $q->fetchAll());
+        $body = '<p class="lead">Witaj ponownie, ' . h($u['full_name']) . '.</p>'
+              . card_box('Moje wizyty', data_table(['Termin', 'Lekarz', 'Specjalizacja', 'Status', 'Powód'], $rows));
         break;
     case 'doctor':
         $q = $pdo->prepare('SELECT pu.full_name, p.phone, p.dob FROM assignments s
@@ -35,25 +35,26 @@ switch ($u['role']) {
             WHERE d.user_id=? ORDER BY pu.full_name');
         $q->execute([$u['id']]);
         $rows = array_map(fn($r) => [$r['full_name'], $r['dob'], $r['phone']], $q->fetchAll());
-        $body = '<div class="stats">' . stat_box('Assigned patients', count($rows)) . '</div>'
-              . card_box('Assigned patients', data_table(['Name', 'Date of birth', 'Phone'], $rows));
+        $body = '<div class="stats">' . stat_box('Przypisani pacjenci', count($rows)) . '</div>'
+              . card_box('Przypisani pacjenci', data_table(['Imię i nazwisko', 'Data urodzenia', 'Telefon'], $rows));
         break;
     case 'reception':
-        $rows = array_map(fn($r) => [$r['starts_at'], $r['pn'], $r['dn'], $r['status']], $pdo->query(
+        $rows = array_map(fn($r) => [$r['starts_at'], $r['pn'], $r['dn'], status_pl($r['status'])], $pdo->query(
             'SELECT a.starts_at, pu.full_name pn, du.full_name dn, a.status FROM appointments a
              JOIN patients p ON p.id=a.patient_id JOIN users pu ON pu.id=p.user_id
              JOIN doctors d ON d.id=a.doctor_id JOIN users du ON du.id=d.user_id ORDER BY a.starts_at')->fetchAll());
-        $body = '<div class="stats">' . stat_box('Appointments', count($rows)) . '</div>'
-              . card_box('Clinic schedule', data_table(['When', 'Patient', 'Doctor', 'Status'], $rows));
+        $body = '<div class="stats">' . stat_box('Wizyty', count($rows)) . '</div>'
+              . card_box('Grafik przychodni', data_table(['Termin', 'Pacjent', 'Lekarz', 'Status'], $rows));
         break;
     case 'admin':
-        $rows = array_map(fn($r) => [$r['id'], $r['email'], $r['full_name'], $r['role'], $r['is_active'] ? 'active' : 'disabled'],
+        $rows = array_map(fn($r) => [$r['id'], $r['email'], $r['full_name'], role_pl($r['role']), $r['is_active'] ? 'aktywne' : 'zablokowane'],
             $pdo->query('SELECT id,email,full_name,role,is_active FROM users ORDER BY id')->fetchAll());
-        $cnt = fn($r) => count(array_filter($rows, fn($x) => $x[3] === $r));
-        $body = '<div class="stats">' . stat_box('Users', count($rows)) . stat_box('Patients', $cnt('patient')) . stat_box('Doctors', $cnt('doctor')) . '</div>'
-              . card_box('Users overview', data_table(['ID', 'Email', 'Name', 'Role', 'State'], $rows));
+        $all = $pdo->query('SELECT role FROM users')->fetchAll();
+        $cntRole = fn($role) => count(array_filter($all, fn($x) => $x['role'] === $role));
+        $body = '<div class="stats">' . stat_box('Użytkownicy', count($rows)) . stat_box('Pacjenci', $cntRole('patient')) . stat_box('Lekarze', $cntRole('doctor')) . '</div>'
+              . card_box('Przegląd użytkowników', data_table(['ID', 'E-mail', 'Imię i nazwisko', 'Rola', 'Stan'], $rows));
         break;
     default:
-        $body = '<p>Unknown role.</p>';
+        $body = '<p>Nieznana rola.</p>';
 }
-render(ucfirst($u['role']) . ' dashboard', $body);
+render(role_pl($u['role']) . ' — pulpit', $body);

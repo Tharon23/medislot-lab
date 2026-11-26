@@ -29,8 +29,8 @@ user($pdo, 'recepcja@novamed.lab', 'Reception123!', 'reception', 'Renata Recepcj
 
 $docs = [];
 foreach ([
-    ['lekarz1@novamed.lab', 'Doctor123!', 'Dr. Lena Lekarz', 'General practice'],
-    ['lekarz2@novamed.lab', 'Doctor456!', 'Dr. Marek Kardiol', 'Cardiology'],
+    ['lekarz1@novamed.lab', 'Doctor123!', 'Dr Lena Lekarz', 'Medycyna rodzinna'],
+    ['lekarz2@novamed.lab', 'Doctor456!', 'Dr Marek Kardiol', 'Kardiologia'],
 ] as [$e, $pw, $n, $sp]) {
     $uid = user($pdo, $e, $pw, 'doctor', $n);
     $pdo->prepare('INSERT INTO doctors (user_id,specialty) VALUES (?,?)')->execute([$uid, $sp]);
@@ -53,7 +53,7 @@ foreach ($people as $i => [$e, $pw, $n]) {
     $dob = sprintf('%d-%02d-%02d', 1960 + $i * 4, 1 + $i, 10 + $i);
     $pdo->prepare('INSERT INTO patients (user_id,dob,phone,address,pesel_synth) VALUES (?,?,?,?,?)')
         ->execute([$uid, $dob, sprintf('+48 500 000 %03d', $i + 1),
-                   ($i + 1) . ' Synthetic Street, Testville', sprintf('9900000%04d', $i + 1)]);
+                   'ul. Testowa ' . ($i + 1) . ', Testowo', sprintf('9900000%04d', $i + 1)]);
     $pats[] = (int)$pdo->lastInsertId();
 }
 
@@ -63,33 +63,33 @@ foreach ($pats as $i => $pid) { $as->execute([$docs[$i < 4 ? 0 : 1], $pid]); }
 $as->execute([$docs[1], $pats[0]]);
 
 $ap = $pdo->prepare('INSERT INTO appointments (patient_id,doctor_id,starts_at,status,reason) VALUES (?,?,?,?,?)');
-$ap->execute([$pats[0], $docs[0], date('Y-m-d 09:00:00', strtotime('+2 days')), 'scheduled', 'Annual check-up']);
-$ap->execute([$pats[0], $docs[1], date('Y-m-d 11:30:00', strtotime('+9 days')), 'scheduled', 'ECG follow-up']);
-$ap->execute([$pats[0], $docs[0], date('Y-m-d 10:00:00', strtotime('-20 days')), 'completed', 'Flu symptoms']);
-$ap->execute([$pats[1], $docs[0], date('Y-m-d 10:30:00', strtotime('+1 day')), 'scheduled', 'Back pain']);
-$ap->execute([$pats[2], $docs[0], date('Y-m-d 13:00:00', strtotime('+3 days')), 'scheduled', 'Blood test results']);
-$ap->execute([$pats[3], $docs[0], date('Y-m-d 14:00:00', strtotime('+3 days')), 'cancelled', 'Prescription renewal']);
-$ap->execute([$pats[4], $docs[1], date('Y-m-d 08:30:00', strtotime('+2 days')), 'scheduled', 'Chest pain consultation']);
-$ap->execute([$pats[5], $docs[1], date('Y-m-d 12:00:00', strtotime('+4 days')), 'scheduled', 'Blood pressure review']);
+$ap->execute([$pats[0], $docs[0], date('Y-m-d 09:00:00', strtotime('+2 days')), 'scheduled', 'Kontrola roczna']);
+$ap->execute([$pats[0], $docs[1], date('Y-m-d 11:30:00', strtotime('+9 days')), 'scheduled', 'Kontrola EKG']);
+$ap->execute([$pats[0], $docs[0], date('Y-m-d 10:00:00', strtotime('-20 days')), 'completed', 'Objawy grypy']);
+$ap->execute([$pats[1], $docs[0], date('Y-m-d 10:30:00', strtotime('+1 day')), 'scheduled', 'Ból pleców']);
+$ap->execute([$pats[2], $docs[0], date('Y-m-d 13:00:00', strtotime('+3 days')), 'scheduled', 'Wyniki badań krwi']);
+$ap->execute([$pats[3], $docs[0], date('Y-m-d 14:00:00', strtotime('+3 days')), 'cancelled', 'Przedłużenie recepty']);
+$ap->execute([$pats[4], $docs[1], date('Y-m-d 08:30:00', strtotime('+2 days')), 'scheduled', 'Konsultacja bólu w klatce piersiowej']);
+$ap->execute([$pats[5], $docs[1], date('Y-m-d 12:00:00', strtotime('+4 days')), 'scheduled', 'Kontrola ciśnienia']);
 
 $nt = $pdo->prepare('INSERT INTO notes (patient_id,doctor_id,body_html) VALUES (?,?,?)');
-$nt->execute([$pats[0], $docs[0], '<p>Patient presents with mild flu symptoms. Rest and fluids advised.</p>']);
-$nt->execute([$pats[0], $docs[1], '<p>ECG normal. Recheck in 6 months.</p>']);
-$nt->execute([$pats[1], $docs[0], '<p>Lower back pain, <b>no red flags</b>. Physiotherapy referral.</p>']);
-$nt->execute([$pats[4], $docs[1], '<p>Elevated BP. Start monitoring diary.</p>']);
+$nt->execute([$pats[0], $docs[0], '<p>Pacjent z łagodnymi objawami grypy. Zalecono odpoczynek i nawadnianie.</p>']);
+$nt->execute([$pats[0], $docs[1], '<p>EKG w normie. Kontrola za 6 miesięcy.</p>']);
+$nt->execute([$pats[1], $docs[0], '<p>Ból dolnego odcinka pleców, <b>bez objawów alarmowych</b>. Skierowanie na fizjoterapię.</p>']);
+$nt->execute([$pats[4], $docs[1], '<p>Podwyższone ciśnienie. Rozpocząć dzienniczek pomiarów.</p>']);
 
 $at = $pdo->prepare('INSERT INTO attachments (patient_id,object_key,filename,content_type,uploaded_by) VALUES (?,?,?,?,?)');
-$at->execute([$pats[0], 'patient1/blood-test-2026.pdf', 'blood-test-2026.pdf', 'application/pdf', 1]);
-$at->execute([$pats[1], 'patient2/xray-lumbar.png', 'xray-lumbar.png', 'image/png', 1]);
+$at->execute([$pats[0], 'pacjent1/wynik-krwi-2026.pdf', 'wynik-krwi-2026.pdf', 'application/pdf', 1]);
+$at->execute([$pats[1], 'pacjent2/rtg-ledzwiowy.png', 'rtg-ledzwiowy.png', 'image/png', 1]);
 
 // Seed the actual MinIO objects so downloads resolve and #11 (public bucket, guessable keys)
 // is demonstrable on seeded data. Synthetic bytes only. Runs in the php container.
 if (is_file('/var/www/html/includes/minio.php')) {
     require_once '/var/www/html/includes/minio.php';
     minio_ensure_bucket();
-    minio_put_object('patient1/blood-test-2026.pdf',
-        "%PDF-1.4\n% Synthetic lab blood-test report. Not real PHI.\n", 'application/pdf');
-    minio_put_object('patient2/xray-lumbar.png',
+    minio_put_object('pacjent1/wynik-krwi-2026.pdf',
+        "%PDF-1.4\n% Syntetyczny wynik badania krwi. Dane testowe, nie PHI.\n", 'application/pdf');
+    minio_put_object('pacjent2/rtg-ledzwiowy.png',
         "\x89PNG\r\n\x1a\n" . str_repeat("\0", 64), 'image/png');
 }
 

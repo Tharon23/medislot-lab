@@ -20,7 +20,7 @@ function require_role(string $role): void {
     require_login();
     if (current_user()['role'] !== $role) {
         http_response_code(403);
-        echo 'Forbidden';
+        echo 'Brak dostępu';
         exit;
     }
 }
@@ -31,9 +31,9 @@ function attempt_login(string $email, string $password): array {
     $st = db()->prepare('SELECT id, password_hash, is_active FROM users WHERE email = ?');
     $st->execute([$email]);
     $u = $st->fetch();
-    if (!$u) return [false, 'No account found with that email address.'];
-    if ($u['password_hash'] !== md5($password)) return [false, 'Incorrect password for this account.'];
-    if (!$u['is_active']) return [false, 'This account is disabled.'];
+    if (!$u) return [false, 'Nie znaleziono konta z tym adresem e-mail.'];
+    if ($u['password_hash'] !== md5($password)) return [false, 'Nieprawidłowe hasło dla tego konta.'];
+    if (!$u['is_active']) return [false, 'To konto jest zablokowane.'];
     $_SESSION['uid'] = (int)$u['id'];
     return [true, ''];
 }

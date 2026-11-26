@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $role = $_POST['role'] ?? '';
     if (in_array($role, ['patient', 'doctor', 'reception', 'admin'], true)) {
         $pdo->prepare('UPDATE users SET role=? WHERE id=?')->execute([$role, $id]);
-        $msg = '<div class="ok">Role updated.</div>';
+        $msg = '<div class="ok">Rola zaktualizowana.</div>';
     }
 }
 
@@ -20,16 +20,16 @@ $st = $pdo->prepare('SELECT id,email,full_name,role FROM users WHERE id=?');
 $st->execute([$id]);
 $user = $st->fetch();
 if (!$user) {
-    render('Admin - Role', $msg . '<section class="card"><p>Pick a user from <a href="/admin_users.php">Users</a>.</p></section>');
+    render('Administracja — rola', $msg . '<section class="card"><p>Wybierz użytkownika z listy <a href="/admin_users.php">Użytkownicy</a>.</p></section>');
     exit;
 }
 $opts = '';
 foreach (['patient', 'doctor', 'reception', 'admin'] as $r) {
-    $opts .= '<option value="' . $r . '"' . ($user['role'] === $r ? ' selected' : '') . '>' . $r . '</option>';
+    $opts .= '<option value="' . $r . '"' . ($user['role'] === $r ? ' selected' : '') . '>' . role_pl($r) . '</option>';
 }
 $body = $msg . '<section class="card"><p><b>' . h($user['full_name']) . '</b> (' . h($user['email']) . ')</p>'
   . '<form class="form" method="post" action="/admin_role.php">'
   . '<input type="hidden" name="id" value="' . (int)$user['id'] . '">'
-  . '<label>Role<select name="role">' . $opts . '</select></label>'
-  . '<button class="btn" type="submit">Update role</button></form></section>';
-render('Admin - Role', $body);
+  . '<label>Rola<select name="role">' . $opts . '</select></label>'
+  . '<button class="btn" type="submit">Zaktualizuj rolę</button></form></section>';
+render('Administracja — rola', $body);

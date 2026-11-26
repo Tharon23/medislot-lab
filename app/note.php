@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $st = $pdo->prepare('SELECT p.id, pu.full_name FROM assignments s JOIN patients p ON p.id=s.patient_id JOIN users pu ON pu.id=p.user_id WHERE s.doctor_id=?');
 $st->execute([$did]);
 $body = '<section class="card"><form class="form" method="post" action="/note.php">'
-  . '<label>Patient<select name="patient_id">' . options($st->fetchAll()) . '</select></label>'
-  . '<label>Note (HTML allowed)<textarea name="body_html"></textarea></label>'
-  . '<button class="btn" type="submit">Save note</button></form></section>';
-render('Write note', $body);
+  . '<label>Pacjent<select name="patient_id">' . options($st->fetchAll()) . '</select></label>'
+  . '<label>Notatka (dozwolony HTML)<textarea name="body_html"></textarea></label>'
+  . '<button class="btn" type="submit">Zapisz notatkę</button></form></section>';
+render('Dodaj notatkę', $body);

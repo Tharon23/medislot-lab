@@ -27,15 +27,15 @@ if ($min !== '') {
 }
 
 $body = '<section class="card"><form class="form" method="get" action="/search.php">'
-  . '<label>Minimum patient id<input type="text" name="min_id" value="' . h((string)$min) . '"></label>'
-  . '<button class="btn" type="submit">Search</button></form></section>';
+  . '<label>Minimalne id pacjenta<input type="text" name="min_id" value="' . h((string)$min) . '"></label>'
+  . '<button class="btn" type="submit">Szukaj</button></form></section>';
 if ($err) $body .= '<div class="alert">' . h($err) . '</div>';
 if ($rows) {
-    $body .= '<section class="card"><table><thead><tr><th>ID</th><th>Email</th><th>Name</th><th>Role</th></tr></thead><tbody>';
+    $body .= '<section class="card"><table><thead><tr><th>ID</th><th>E-mail</th><th>Imię i nazwisko</th><th>Rola</th></tr></thead><tbody>';
     foreach ($rows as $r) {
         $body .= '<tr><td>' . h((string)$r['id']) . '</td><td>' . h((string)$r['email'])
             . '</td><td>' . h((string)$r['full_name']) . '</td><td>' . h((string)$r['role']) . '</td></tr>';
     }
     $body .= '</tbody></table></section>';
 }
-render('Patient search', $body);
+render('Szukaj pacjenta', $body);
